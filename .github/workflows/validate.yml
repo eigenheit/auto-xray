@@ -1,0 +1,42 @@
+name: Validate repository
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+
+      - name: Validate source and scripts
+        run: bash scripts/validate.sh
+
+      - name: Check version file
+        run: |
+          test -s VERSION
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION
+
+      - name: Check Xray metadata
+        run: |
+          grep -q 'Xray 1.8.4' vendor/XRAY_VERSION.txt
+          grep -Eq '^[0-9a-f]{64}[[:space:]]+xray$' vendor/XRAY_SHA256.txt
+
+      - name: Verify no bundled runtime binary in source tree
+        run: |
+          if git ls-files vendor/xray | grep -q .; then
+            echo 'vendor/xray must not be committed to source control.'
+            exit 1
+          fi
