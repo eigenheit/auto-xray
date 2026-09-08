@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate source
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in scripts/*.command; do
+            echo "Checking $f"
+            /bin/bash -n "$f"
+          done
+
+      - name: Validate Ruby helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby --version
+          ruby -c src/auto-xray-helper.rb
+
+      - name: Compile AppleScript menu app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "/tmp/AUTO Xray.app"
+          /usr/bin/osacompile -s -o "/tmp/AUTO Xray.app" src/AUTO_Xray.applescript
+
+      - name: Validate Xray metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^Xray 1\.8\.4' vendor/xray/XRAY_VERSION.txt
+          grep -Eq '^[0-9a-f]{64}  xray$' vendor/xray/XRAY_SHA256.txt
+
+      - name: Validate version consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          grep -Fq "AUTO Xray ${VERSION}:" src/AUTO_Xray.applescript
+          grep -Fq "Версия ${VERSION} · Catalina Intel" src/AUTO_Xray.applescript
+
+      - name: Scan tracked text for private runtime markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIE --exclude-dir=.git --exclude='ci.yml' \
+            '(subscription_url\.txt.*https?://|/Users/imac/|55cc8ea1-17bf-48e2-ba8b-8864eff63d05|7b7dec75|70c2)' .; then
+            echo 'Potential private/runtime data found in tracked files.' >&2
+            exit 1
+          fi
