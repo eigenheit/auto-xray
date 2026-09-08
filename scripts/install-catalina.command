@@ -14,6 +14,60 @@ NOTICE="THIRD_PARTY_NOTICES.txt"
 
 fail() { echo; echo "ERROR: $1"; echo; exit 1; }
 
+port_is_listening() {
+  local port="$1"
+  [[ "$port" =~ ^[0-9]+$ ]] || return 1
+  [ "$port" -gt 0 ] || return 1
+  /usr/sbin/lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | /usr/bin/grep -q LISTEN
+}
+
+proxy_field() {
+  local text="$1"
+  local key="$2"
+  /usr/bin/printf '%s\n' "$text" | /usr/bin/awk -F': ' -v k="$key" '$1 == k { print $2; exit }'
+}
+
+sanitize_proxy_kind() {
+  local service="$1"
+  local get_flag="$2"
+  local state_flag="$3"
+  local out enabled server port
+
+  out="$(/usr/bin/env LC_ALL=C /usr/sbin/networksetup "$get_flag" "$service" 2>/dev/null || true)"
+  enabled="$(proxy_field "$out" "Enabled")"
+  server="$(proxy_field "$out" "Server")"
+  port="$(proxy_field "$out" "Port")"
+
+  [ "$enabled" = "Yes" ] || return 0
+  case "$server" in
+    127.0.0.1|localhost|::1) ;;
+    *) return 0 ;;
+  esac
+
+  if ! port_is_listening "$port"; then
+    /usr/sbin/networksetup "$state_flag" "$service" off >/dev/null 2>&1 || true
+  fi
+}
+
+sanitize_dead_local_proxies() {
+  local raw service
+  while IFS= read -r raw; do
+    [ -n "$raw" ] || continue
+    case "$raw" in
+      "An asterisk"*) continue ;;
+    esac
+    service="${raw#\*}"
+    service="$(/usr/bin/printf '%s' "$service" | /usr/bin/sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [ -n "$service" ] || continue
+
+    sanitize_proxy_kind "$service" -getwebproxy -setwebproxystate
+    sanitize_proxy_kind "$service" -getsecurewebproxy -setsecurewebproxystate
+    sanitize_proxy_kind "$service" -getsocksfirewallproxy -setsocksfirewallproxystate
+  done <<EOF
+$(/usr/bin/env LC_ALL=C /usr/sbin/networksetup -listallnetworkservices 2>/dev/null || true)
+EOF
+}
+
 [ "$(/usr/bin/uname -m)" = "x86_64" ] || fail "Этот установщик предназначен для Intel Mac."
 [ -x "$XRAY" ] || fail "В пакете отсутствует встроенный Xray-core."
 [ -f "$XRAY_SUMS" ] || fail "В пакете отсутствует контрольная сумма Xray-core."
@@ -39,6 +93,11 @@ if [ -f "$APP_DIR/Contents/Resources/auto-xray-helper.rb" ]; then
 fi
 /usr/bin/osascript -e 'tell application "AUTO Xray" to quit' >/dev/null 2>&1 || true
 sleep 1
+
+# A previous proxy client may have left macOS pointing at dead localhost ports
+# (for example V2RayXS 127.0.0.1:8001 / 1081). If no process is listening,
+# those settings must not survive installation because AUTO Xray starts OFF.
+sanitize_dead_local_proxies
 
 mkdir -p "$HOME/Applications"
 rm -rf "$APP_DIR"
@@ -76,6 +135,9 @@ PLIST="$APP_DIR/Contents/Info.plist"
 /usr/bin/codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
 /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" \
   /usr/bin/ruby -EUTF-8:UTF-8 "$APP_DIR/Contents/Resources/auto-xray-helper.rb" bootstrap >/dev/null || fail "Первичная настройка не выполнена."
+
+# Bootstrap must also leave direct internet working while AUTO Xray is OFF.
+sanitize_dead_local_proxies
 
 # Explicitly register the user-local application with Launch Services. This makes
 # ~/Applications/AUTO Xray.app visible to Finder/Launchpad on legacy macOS.
