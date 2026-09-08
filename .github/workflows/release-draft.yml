@@ -51,17 +51,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet pillow
+          mkdir -p .release
+          curl -fL \
+            --retry 5 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 20 --max-time 120 \
+            -o .release/dove.svg \
+            https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/1f54a.svg
+          python3 -m pip install --quiet pillow cairosvg
           python3 - <<'PY'
-          from PIL import Image
           from pathlib import Path
+          import cairosvg
+          from PIL import Image
 
-          src = Path('assets/dove-icon.png')
+          svg = Path('.release/dove.svg')
+          png = Path('.release/dove-1024.png')
           dst = Path('.release/Dove.icns')
-          im = Image.open(src).convert('RGBA')
-          # Decode/re-encode the source before ICNS generation. This avoids relying
-          # on Catalina's old sips/iconutil conversion path, which corrupted icons
-          # on the real 10.15 test machine.
+          assert svg.stat().st_size > 100
+          cairosvg.svg2png(url=str(svg), write_to=str(png), output_width=1024, output_height=1024)
+          im = Image.open(png).convert('RGBA')
           im.load()
           im.save(dst, format='ICNS')
           assert dst.stat().st_size > 10000
@@ -79,7 +86,6 @@ jobs:
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
-          # Keep the visible version in the compiled menu app synchronized with VERSION.
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
           cp src/auto-xray-supervisor.rb "$PKG/src/auto-xray-supervisor.rb"
@@ -139,7 +145,7 @@ jobs:
           - устойчивое восстановление proxy после кратковременного пропадания сети;
           - автоматическая повторная попытка запуска Xray;
           - контроль соединения из menu-bar watchdog;
-          - иконка приложения собирается заранее, а не средствами старой Catalina;
+          - чистая иконка голубя собирается заранее, а не средствами старой Catalina;
           - приложение принудительно регистрируется в Launch Services для отображения в Launchpad.
 
           ## Установка
