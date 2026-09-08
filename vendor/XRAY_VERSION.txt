@@ -1,0 +1,2 @@
+Xray 1.8.4 (Xray, Penetrates Everything.) Custom (go1.21.0 darwin/amd64)
+A unified platform for anti-censorship.
