@@ -64,7 +64,8 @@ jobs:
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
-          cp assets/dove-icon.png "$PKG/assets/dove-icon.png"
+          cp src/auto-xray-supervisor.rb "$PKG/src/auto-xray-supervisor.rb"
+          base64 --decode assets/dove-clean.png.b64 > "$PKG/assets/dove-clean.png"
           cp vendor/xray/XRAY_VERSION.txt "$PKG/vendor/xray/XRAY_VERSION.txt"
           cp vendor/xray/XRAY_SHA256.txt "$PKG/vendor/xray/XRAY_SHA256.txt"
           cp .package/core/xray "$PKG/vendor/xray/xray"
@@ -91,6 +92,9 @@ jobs:
           3. После установки в строке меню появится голубь 🕊.
           4. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           5. Выберите RF / EU / World → Включить.
+
+          AUTO Xray автоматически проверяет работоспособность proxy и пытается
+          восстановить соединение после временного сетевого сбоя.
 
           Telegram:
           Settings → Advanced → Connection type → Proxy settings → Use system proxy settings.
