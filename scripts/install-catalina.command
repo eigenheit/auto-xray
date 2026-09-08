@@ -7,9 +7,9 @@ APP_DIR="$HOME/Applications/AUTO Xray.app"
 SRC="src/AUTO_Xray.applescript"
 HELPER="src/auto-xray-helper.rb"
 XRAY="vendor/xray/xray"
+XRAY_SUMS="vendor/xray/XRAY_SHA256.txt"
 ICON="assets/dove-icon.png"
 NOTICE="THIRD_PARTY_NOTICES.txt"
-EXPECTED_SHA="25ab858d6a6d763c3bf98d21a9c26571a58d807a857b273e49d6b824c4f39"
 TMP="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/auto-xray-install.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 ICONSET="$TMP/DoveIcon.iconset"
@@ -17,9 +17,19 @@ ICONSET="$TMP/DoveIcon.iconset"
 fail() { echo; echo "ERROR: $1"; echo; exit 1; }
 [ "$(/usr/bin/uname -m)" = "x86_64" ] || fail "Этот установщик предназначен для Intel Mac."
 [ -x "$XRAY" ] || fail "В пакете отсутствует встроенный Xray-core."
+[ -f "$XRAY_SUMS" ] || fail "В пакете отсутствует контрольная сумма Xray-core."
 [ -f "$ICON" ] || fail "В пакете отсутствует иконка AUTO Xray."
-ACTUAL_SHA="$(/usr/bin/shasum -a 256 "$XRAY" | /usr/bin/awk '{print $1}')"
-[ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || fail "Встроенный Xray-core поврежден."
+
+# Catalina can run old system tools under unusual locale settings. Compare the first
+# 64 ASCII hex characters directly instead of parsing shasum output with awk.
+EXPECTED_SHA="$(/usr/bin/head -n 1 "$XRAY_SUMS" | /usr/bin/cut -c 1-64)"
+ACTUAL_SHA="$(/usr/bin/env LC_ALL=C /usr/bin/shasum -a 256 "$XRAY" | /usr/bin/cut -c 1-64)"
+if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+  echo "EXPECTED: $EXPECTED_SHA"
+  echo "ACTUAL:   $ACTUAL_SHA"
+  fail "Встроенный Xray-core не прошел проверку контрольной суммы."
+fi
+
 /usr/bin/ruby -EUTF-8:UTF-8 -c "$HELPER" >/dev/null || fail "Ruby helper поврежден."
 
 if [ -f "$APP_DIR/Contents/Resources/auto-xray-helper.rb" ]; then
