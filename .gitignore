@@ -6,9 +6,13 @@
 # Local build outputs
 build/
 dist/
+AUTO_Xray_*_BUILD/
 *.dmg
 *.zip
 *.app/
+
+# Bundled Xray binary is added only to release packages, not to Git
+vendor/xray/xray
 
 # AUTO Xray runtime/user data
 vless-work/
