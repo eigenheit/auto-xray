@@ -26,19 +26,25 @@ jobs:
             /bin/bash -n "$f"
           done
 
-      - name: Validate Ruby helper
+      - name: Validate Ruby helpers
         shell: bash
         run: |
           set -euo pipefail
           ruby --version
           ruby -c src/auto-xray-helper.rb
+          ruby -c src/auto-xray-supervisor.rb
 
       - name: Compile AppleScript menu app
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          GENERATED="/tmp/AUTO_Xray.generated.applescript"
+          sed -E "s/2\\.5\\.[0-9]+/${VERSION}/g" src/AUTO_Xray.applescript > "$GENERATED"
           rm -rf "/tmp/AUTO Xray.app"
-          /usr/bin/osacompile -s -o "/tmp/AUTO Xray.app" src/AUTO_Xray.applescript
+          /usr/bin/osacompile -s -o "/tmp/AUTO Xray.app" "$GENERATED"
+          grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
+          grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
       - name: Validate Xray metadata
         shell: bash
@@ -46,14 +52,6 @@ jobs:
           set -euo pipefail
           grep -q '^Xray 1\.8\.4' vendor/xray/XRAY_VERSION.txt
           grep -Eq '^[0-9a-f]{64}  xray$' vendor/xray/XRAY_SHA256.txt
-
-      - name: Validate version consistency
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          grep -Fq "AUTO Xray ${VERSION}:" src/AUTO_Xray.applescript
-          grep -Fq "Версия ${VERSION} · Catalina Intel" src/AUTO_Xray.applescript
 
       - name: Scan tracked text for private runtime markers
         shell: bash
