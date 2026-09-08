@@ -1,0 +1,30 @@
+name: Promote Stable Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.stable-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Promote current version to stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          TAG="v${VERSION}"
+          gh release view "$TAG" >/dev/null
+          gh release edit "$TAG" --prerelease=false --draft=false --title "AUTO Xray ${VERSION}"
+          echo "Promoted $TAG to stable."
