@@ -1,14 +1,18 @@
-name: Create Draft Release
+name: Publish Pre-release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.release-trigger'
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build installer and create draft release
+    name: Build installer and publish pre-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -119,10 +123,10 @@ jobs:
 
           Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он не скачивается.
 
-          Перед публикацией этот релиз остается **Draft**, чтобы его можно было проверить на реальном Catalina Mac.
+          **Статус:** pre-release. После дополнительной проверки установщика на реальном Catalina Mac релиз будет повышен до stable.
           EOF
 
-      - name: Create or update draft GitHub Release
+      - name: Create or update GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -135,10 +139,10 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ZIP" "$SUM" --clobber
-            gh release edit "$TAG" --draft --title "AUTO Xray ${VERSION}" --notes-file dist/RELEASE_NOTES.md
+            gh release edit "$TAG" --prerelease --draft=false --title "AUTO Xray ${VERSION}" --notes-file dist/RELEASE_NOTES.md
           else
             gh release create "$TAG" "$ZIP" "$SUM" \
-              --draft \
+              --prerelease \
               --target "$GITHUB_SHA" \
               --title "AUTO Xray ${VERSION}" \
               --notes-file dist/RELEASE_NOTES.md
