@@ -47,6 +47,26 @@ jobs:
           cp "$XRAY" .release/core/xray
           chmod +x .release/core/xray
 
+      - name: Build clean macOS application icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+
+          src = Path('assets/dove-icon.png')
+          dst = Path('.release/Dove.icns')
+          im = Image.open(src).convert('RGBA')
+          # Decode/re-encode the source before ICNS generation. This avoids relying
+          # on Catalina's old sips/iconutil conversion path, which corrupted icons
+          # on the real 10.15 test machine.
+          im.load()
+          im.save(dst, format='ICNS')
+          assert dst.stat().st_size > 10000
+          PY
+
       - name: Assemble standalone Catalina installer
         shell: bash
         run: |
@@ -59,8 +79,11 @@ jobs:
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
+          # Keep the visible version in the compiled menu app synchronized with VERSION.
+          sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
-          cp assets/dove-icon.png "$PKG/assets/dove-icon.png"
+          cp src/auto-xray-supervisor.rb "$PKG/src/auto-xray-supervisor.rb"
+          cp .release/Dove.icns "$PKG/assets/Dove.icns"
           cp vendor/xray/XRAY_VERSION.txt "$PKG/vendor/xray/XRAY_VERSION.txt"
           cp vendor/xray/XRAY_SHA256.txt "$PKG/vendor/xray/XRAY_SHA256.txt"
           cp .release/core/xray "$PKG/vendor/xray/xray"
@@ -111,6 +134,14 @@ jobs:
 
           **Проверенная система:** Intel Mac (x86_64), macOS Catalina 10.15.x.
 
+          ## Что изменилось
+
+          - устойчивое восстановление proxy после кратковременного пропадания сети;
+          - автоматическая повторная попытка запуска Xray;
+          - контроль соединения из menu-bar watchdog;
+          - иконка приложения собирается заранее, а не средствами старой Catalina;
+          - приложение принудительно регистрируется в Launch Services для отображения в Launchpad.
+
           ## Установка
 
           1. Скачайте \`AUTO_Xray_Catalina_Installer_v${VERSION}.zip\`.
@@ -123,7 +154,7 @@ jobs:
 
           Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он не скачивается.
 
-          **Статус:** pre-release. После дополнительной проверки установщика на реальном Catalina Mac релиз будет повышен до stable.
+          **Статус:** pre-release до проверки на реальном Catalina Mac.
           EOF
 
       - name: Create or update GitHub pre-release
