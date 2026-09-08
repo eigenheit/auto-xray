@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    name: Build installer and publish pre-release
+    name: Build ZIP and publish pre-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -74,7 +74,7 @@ jobs:
           assert dst.stat().st_size > 10000
           PY
 
-      - name: Assemble standalone Catalina installer
+      - name: Assemble standalone Catalina ZIP installer
         shell: bash
         run: |
           set -euo pipefail
@@ -110,6 +110,9 @@ jobs:
           AUTO Xray ${VERSION} — Intel Mac / macOS Catalina
           =================================================
 
+          Основной способ установки этой версии — DMG из GitHub Releases.
+          Этот ZIP оставлен как резервный вариант.
+
           1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
           2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
@@ -142,25 +145,27 @@ jobs:
 
           ## Что изменилось
 
-          - устойчивое восстановление proxy после кратковременного пропадания сети;
-          - автоматическая повторная попытка запуска Xray;
-          - контроль соединения из menu-bar watchdog;
-          - чистая иконка голубя собирается заранее, а не средствами старой Catalina;
-          - приложение принудительно регистрируется в Launch Services для отображения в Launchpad.
+          - новый DMG как основной способ установки;
+          - внутри DMG — отдельное приложение **Install AUTO Xray.app**, без Terminal во время установки;
+          - рабочая сетевая часть сохранена от проверенной версии 2.5.5 без изменений;
+          - ZIP-инсталлятор оставлен как резервный вариант.
 
-          ## Установка
+          ## Установка через DMG
 
-          1. Скачайте \`AUTO_Xray_Catalina_Installer_v${VERSION}.zip\`.
-          2. Распакуйте архив.
-          3. Запустите \`INSTALL_AUTO_XRAY_CATALINA.command\`.
+          1. Скачайте \`AUTO_Xray_Catalina_v${VERSION}.dmg\`.
+          2. Откройте DMG.
+          3. Запустите **Install AUTO Xray.app**.
           4. Если Catalina показывает предупреждение: **Control + клик → Open / Открыть**.
-          5. Нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
+          5. Нажмите **Установить**.
+          6. После установки нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
+
+          После установки AUTO Xray стартует в состоянии **OFF**: обычный интернет должен работать напрямую.
 
           Для Telegram выберите **Use system proxy settings**.
 
-          Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он не скачивается.
+          Xray-core 1.8.4 находится внутри установочного пакета. На пользовательском Mac он отдельно не скачивается.
 
-          **Статус:** pre-release до проверки на реальном Catalina Mac.
+          **Статус:** pre-release до проверки DMG на реальном Intel Mac с Catalina.
           EOF
 
       - name: Create or update GitHub pre-release
@@ -184,3 +189,135 @@ jobs:
               --title "AUTO Xray ${VERSION}" \
               --notes-file dist/RELEASE_NOTES.md
           fi
+
+  dmg:
+    name: Build Catalina DMG and attach to release
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download the exact ZIP payload already published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          mkdir -p .release/download .release/unpacked
+          gh release download "$TAG" \
+            --pattern "AUTO_Xray_Catalina_Installer_v${VERSION}.zip" \
+            --dir .release/download
+          unzip -q ".release/download/AUTO_Xray_Catalina_Installer_v${VERSION}.zip" -d .release/unpacked
+
+          PAYLOAD=".release/unpacked/AUTO_Xray_Catalina_Installer_v${VERSION}"
+          test -f "$PAYLOAD/VERSION"
+          test -f "$PAYLOAD/assets/Dove.icns"
+          test -x "$PAYLOAD/vendor/xray/xray"
+
+          EXPECTED="$(head -n 1 "$PAYLOAD/vendor/xray/XRAY_SHA256.txt" | cut -c 1-64)"
+          ACTUAL="$(shasum -a 256 "$PAYLOAD/vendor/xray/xray" | cut -c 1-64)"
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Build Catalina-compatible installer app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          PAYLOAD=".release/unpacked/AUTO_Xray_Catalina_Installer_v${VERSION}"
+          ROOT=".release/dmg-root"
+          APP="$ROOT/Install AUTO Xray.app"
+
+          rm -rf "$ROOT"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp scripts/dmg-installer-launcher.sh "$APP/Contents/MacOS/installer"
+          chmod +x "$APP/Contents/MacOS/installer"
+          cp "$PAYLOAD/assets/Dove.icns" "$APP/Contents/Resources/Dove.icns"
+          /usr/bin/ditto "$PAYLOAD" "$APP/Contents/Resources/payload"
+
+          cat > "$APP/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key><string>Install AUTO Xray</string>
+            <key>CFBundleExecutable</key><string>installer</string>
+            <key>CFBundleIconFile</key><string>Dove.icns</string>
+            <key>CFBundleIdentifier</key><string>local.autoxray.installer</string>
+            <key>CFBundleName</key><string>Install AUTO Xray</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+            <key>CFBundleVersion</key><string>${VERSION//./}</string>
+            <key>LSMinimumSystemVersion</key><string>10.15</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+          /usr/bin/plutil -lint "$APP/Contents/Info.plist"
+          /bin/bash -n "$APP/Contents/MacOS/installer"
+
+          EXPECTED="$(head -n 1 "$PAYLOAD/vendor/xray/XRAY_SHA256.txt" | cut -c 1-64)"
+          ACTUAL="$(shasum -a 256 "$APP/Contents/Resources/payload/vendor/xray/xray" | cut -c 1-64)"
+          test "$ACTUAL" = "$EXPECTED"
+
+          cat > "$ROOT/README.txt" <<EOF
+          AUTO Xray ${VERSION} — macOS Catalina / Intel
+          ==============================================
+
+          1. Откройте Install AUTO Xray.app.
+          2. Если Catalina блокирует запуск: Control + клик → Open / Открыть.
+          3. Нажмите «Установить».
+          4. После установки голубь появится в строке меню и в Launchpad.
+
+          AUTO Xray запускается в состоянии OFF, поэтому обычный интернет
+          должен продолжить работать напрямую до нажатия «Включить».
+
+          Этот релиз не подписан Apple Developer ID и не notarized.
+          Не отключайте Gatekeeper глобально.
+          EOF
+
+      - name: Create and verify DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          DMG="dist/AUTO_Xray_Catalina_v${VERSION}.dmg"
+
+          hdiutil create \
+            -volname "AUTO Xray ${VERSION}" \
+            -srcfolder .release/dmg-root \
+            -fs HFS+ \
+            -format UDZO \
+            -ov "$DMG"
+
+          hdiutil verify "$DMG"
+          test -s "$DMG"
+
+      - name: Publish DMG and combined checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          ZIP=".release/download/AUTO_Xray_Catalina_Installer_v${VERSION}.zip"
+          DMG="dist/AUTO_Xray_Catalina_v${VERSION}.dmg"
+
+          (cd "$(dirname "$ZIP")" && shasum -a 256 "$(basename "$ZIP")") > dist/SHA256SUMS.txt
+          (cd dist && shasum -a 256 "$(basename "$DMG")") >> dist/SHA256SUMS.txt
+
+          gh release upload "$TAG" "$DMG" dist/SHA256SUMS.txt --clobber
