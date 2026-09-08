@@ -8,3 +8,9 @@ Release: https://github.com/XTLS/Xray-core/releases/tag/v1.8.4
 License text: https://www.mozilla.org/MPL/2.0/
 
 The Xray-core binary is bundled with the AUTO Xray release so installation on legacy Macs does not require downloading the core separately.
+
+Application icon
+The public release build uses the Dove of Peace glyph from Twemoji 15.1.0 as a clean, reproducible source for the macOS application icon.
+Project: https://github.com/jdecked/twemoji
+Graphics license: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License: https://creativecommons.org/licenses/by/4.0/
