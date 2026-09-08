@@ -26,16 +26,6 @@ fi
 
 VERSION="$(/bin/cat "$PAYLOAD/VERSION" | /usr/bin/tr -d '[:space:]')"
 
-if ! /usr/bin/osascript - "$VERSION" <<'APPLESCRIPT' >/dev/null 2>&1
-on run argv
-  set v to item 1 of argv
-  display dialog "Установить AUTO Xray " & v & "?\n\nПодписка, HWID и настройки будут сохранены. После установки AUTO Xray запустится в состоянии OFF, поэтому обычный интернет должен продолжить работать напрямую." buttons {"Отмена", "Установить"} default button "Установить" cancel button "Отмена" with title "AUTO Xray"
-end run
-APPLESCRIPT
-then
-  exit 0
-fi
-
 /bin/mkdir -p "$LOG_DIR"
 {
   echo "=== AUTO Xray DMG install $(/bin/date) ==="
@@ -48,7 +38,7 @@ if [ "$RC" -eq 0 ]; then
   /usr/bin/osascript - "$VERSION" <<'APPLESCRIPT' >/dev/null 2>&1 || true
 on run argv
   set v to item 1 of argv
-  display dialog "AUTO Xray " & v & " установлен и запущен.\n\nГолубь в строке меню сейчас должен быть полупрозрачным: AUTO Xray OFF. Обычный интернет работает напрямую. Для подключения нажмите голубя → Включить." buttons {"Готово"} default button "Готово" with title "AUTO Xray"
+  display notification "Установка завершена. AUTO Xray запущен в состоянии OFF." with title "AUTO Xray " & v
 end run
 APPLESCRIPT
   exit 0
