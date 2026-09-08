@@ -60,7 +60,8 @@ jobs:
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
-          cp assets/dove-icon.png "$PKG/assets/dove-icon.png"
+          cp src/auto-xray-supervisor.rb "$PKG/src/auto-xray-supervisor.rb"
+          base64 --decode assets/dove-clean.png.b64 > "$PKG/assets/dove-clean.png"
           cp vendor/xray/XRAY_VERSION.txt "$PKG/vendor/xray/XRAY_VERSION.txt"
           cp vendor/xray/XRAY_SHA256.txt "$PKG/vendor/xray/XRAY_SHA256.txt"
           cp .release/core/xray "$PKG/vendor/xray/xray"
@@ -85,6 +86,9 @@ jobs:
           2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
+
+          AUTO Xray автоматически проверяет proxy и пытается восстановить его
+          после временного сетевого сбоя.
 
           Telegram: Use system proxy settings.
 
@@ -111,6 +115,14 @@ jobs:
 
           **Проверенная система:** Intel Mac (x86_64), macOS Catalina 10.15.x.
 
+          ## Что изменилось
+
+          - добавлено автоматическое восстановление proxy после временного сетевого сбоя;
+          - старт больше не зависит от единственной HTTPS-проверки `www.gstatic.com`;
+          - для проверки готовности используются несколько легких HTTP endpoint через сам SOCKS proxy;
+          - приложение повторно запускает Xray, если proxy перестал передавать трафик;
+          - пересобрана иконка голубя из очищенного изображения и добавлено обновление LaunchServices/Launchpad.
+
           ## Установка
 
           1. Скачайте \`AUTO_Xray_Catalina_Installer_v${VERSION}.zip\`.
@@ -123,7 +135,7 @@ jobs:
 
           Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он не скачивается.
 
-          **Статус:** pre-release. После дополнительной проверки установщика на реальном Catalina Mac релиз будет повышен до stable.
+          **Статус:** pre-release. Сначала проверяем восстановление соединения и новую иконку на реальном Catalina Mac.
           EOF
 
       - name: Create or update GitHub pre-release
