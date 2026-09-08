@@ -6,6 +6,7 @@ require 'fileutils'
 require 'timeout'
 
 SOCKS_PORT = 2081
+HTTP_PORT = 9001
 HEALTH_INTERVAL = 15
 FAILURES_BEFORE_RESTART = 2
 RESTART_COOLDOWN = 60
@@ -102,6 +103,70 @@ rescue StandardError
   false
 end
 
+def core_running?
+  return false unless File.file?(PID_FILE)
+  process_alive?(File.read(PID_FILE).to_i)
+rescue StandardError
+  false
+end
+
+def network_services
+  rc, out = run_cmd(['/usr/sbin/networksetup', '-listallnetworkservices'], 10)
+  return [] unless rc.zero?
+
+  out.lines.map(&:strip).reject do |line|
+    line.empty? || line.start_with?('An asterisk')
+  end.map { |line| line.sub(/^\*/, '').strip }.reject(&:empty?)
+end
+
+def proxy_state(service, get_flag)
+  rc, out = run_cmd(['/usr/sbin/networksetup', get_flag, service], 10)
+  return nil unless rc.zero?
+
+  state = { 'enabled' => false, 'server' => '', 'port' => 0 }
+  out.each_line do |line|
+    next unless line.include?(':')
+    key, value = line.split(':', 2).map(&:strip)
+    case key.downcase
+    when 'enabled' then state['enabled'] = value.casecmp('yes').zero?
+    when 'server' then state['server'] = value
+    when 'port' then state['port'] = value.to_i
+    end
+  end
+  state
+end
+
+def disable_stale_auto_proxies
+  return false if core_running?
+
+  changed = false
+  specs = [
+    ['-getwebproxy', '-setwebproxystate', HTTP_PORT, 'HTTP'],
+    ['-getsecurewebproxy', '-setsecurewebproxystate', HTTP_PORT, 'HTTPS'],
+    ['-getsocksfirewallproxy', '-setsocksfirewallproxystate', SOCKS_PORT, 'SOCKS']
+  ]
+
+  network_services.each do |service|
+    specs.each do |get_flag, set_flag, expected_port, label|
+      state = proxy_state(service, get_flag)
+      next unless state && state['enabled'] && state['server'] == '127.0.0.1' && state['port'] == expected_port
+
+      rc, out = run_cmd(['/usr/sbin/networksetup', set_flag, service, 'off'], 10)
+      if rc.zero?
+        changed = true
+        log("disabled stale #{label} proxy on #{service}")
+      else
+        log("could not disable stale #{label} proxy on #{service}: #{out.to_s.strip}")
+      end
+    end
+  end
+
+  changed
+rescue StandardError => e
+  log("stale proxy cleanup failed: #{e.message}")
+  false
+end
+
 def stop_pid(pid)
   return unless process_alive?(pid)
   Process.kill('TERM', pid) rescue nil
@@ -181,6 +246,11 @@ def fallback_start
 end
 
 def resilient_start
+  # A failed restore during a Wi-Fi outage can leave AUTO Xray's localhost
+  # proxy endpoints enabled while the core is already stopped. Clear those
+  # endpoints before the core helper snapshots the previous proxy state.
+  disable_stale_auto_proxies
+
   rc, out, err = helper(['start'])
   return [rc, out, err] if rc.zero?
 
@@ -192,6 +262,7 @@ def resilient_start
     [0, "ON\n", '']
   rescue StandardError => e
     helper(['stop'])
+    disable_stale_auto_proxies
     [50, '', "ERROR: #{e.message}\n"]
   end
 end
@@ -214,7 +285,10 @@ end
 def supervisor_health
   rc, out, err = helper(['ensure-proxy'])
   return [rc, out, err] unless rc.zero?
-  return [0, out, err] if out.include?('IDLE')
+  if out.include?('IDLE')
+    disable_stale_auto_proxies
+    return [0, out, err]
+  end
 
   now = Time.now.to_i
   h = read_health
@@ -243,6 +317,7 @@ def supervisor_health
   log('automatic recovery started')
 
   helper(['stop'])
+  disable_stale_auto_proxies
   src, sout, serr = resilient_start
 
   if src.zero?
@@ -270,6 +345,7 @@ when 'ensure-proxy'
 when 'stop'
   File.delete(HEALTH_FILE) rescue nil
   rc, out, err = helper(['stop'] + args)
+  disable_stale_auto_proxies
   print_helper_result(rc, out, err)
 else
   rc, out, err = helper([cmd] + args)
