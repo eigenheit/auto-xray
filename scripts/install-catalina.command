@@ -147,14 +147,18 @@ if [ -x "$LSREGISTER" ]; then
   "$LSREGISTER" -f "$APP_DIR" >/dev/null 2>&1 || true
 fi
 
-CURRENT_TTY="$(/usr/bin/tty 2>/dev/null || true)"
 /usr/bin/open "$APP_DIR"
-/usr/bin/osascript -e 'display dialog "AUTO Xray установлен и запущен." buttons {"OK"} default button "OK" with title "AUTO Xray"' >/dev/null 2>&1 || true
 
-if [[ "$CURRENT_TTY" == /dev/ttys* ]]; then
-  (
-    /bin/sleep 1
-    /usr/bin/osascript - "$CURRENT_TTY" <<'APPLESCRIPT'
+# The DMG installer app owns the user-facing dialogs and does not have a Terminal
+# window to close. Keep the existing .command behavior for the ZIP fallback.
+if [ "${AUTO_XRAY_GUI_INSTALLER:-0}" != "1" ]; then
+  CURRENT_TTY="$(/usr/bin/tty 2>/dev/null || true)"
+  /usr/bin/osascript -e 'display dialog "AUTO Xray установлен и запущен." buttons {"OK"} default button "OK" with title "AUTO Xray"' >/dev/null 2>&1 || true
+
+  if [[ "$CURRENT_TTY" == /dev/ttys* ]]; then
+    (
+      /bin/sleep 1
+      /usr/bin/osascript - "$CURRENT_TTY" <<'APPLESCRIPT'
 on run argv
   set targetTTY to item 1 of argv
   tell application "Terminal"
@@ -169,7 +173,8 @@ on run argv
   end tell
 end run
 APPLESCRIPT
-  ) >/dev/null 2>&1 &
+    ) >/dev/null 2>&1 &
+  fi
 fi
 
 exit 0
