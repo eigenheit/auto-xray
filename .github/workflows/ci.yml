@@ -21,7 +21,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/*.command; do
+          for f in scripts/*.command scripts/*.sh; do
+            [ -e "$f" ] || continue
             echo "Checking $f"
             /bin/bash -n "$f"
           done
