@@ -1,0 +1,277 @@
+# frozen_string_literal: true
+
+require 'json'
+require 'open3'
+require 'fileutils'
+require 'timeout'
+
+SOCKS_PORT = 2081
+HEALTH_INTERVAL = 15
+FAILURES_BEFORE_RESTART = 2
+RESTART_COOLDOWN = 60
+PROBE_URLS = [
+  'http://cp.cloudflare.com/generate_204',
+  'http://connectivitycheck.gstatic.com/generate_204'
+].freeze
+
+RESOURCES = ENV['AUTO_XRAY_RESOURCES'].to_s.empty? ? File.expand_path(__dir__) : ENV['AUTO_XRAY_RESOURCES']
+CORE_HELPER = File.join(RESOURCES, 'auto-xray-core-helper.rb')
+XRAY = File.join(RESOURCES, 'xray')
+
+HOME_DIR = Dir.home
+SUPPORT = File.join(HOME_DIR, 'Library', 'Application Support', 'AUTO Xray')
+STATE = File.join(SUPPORT, 'State')
+LOG_DIR = File.join(HOME_DIR, 'Library', 'Logs', 'AUTO Xray')
+RUNTIME_CONFIG = File.join(STATE, 'runtime_config.json')
+PID_FILE = File.join(STATE, 'xray.pid')
+HEALTH_FILE = File.join(STATE, 'supervisor-health.json')
+RUNTIME_LOG = File.join(LOG_DIR, 'runtime.log')
+
+FileUtils.mkdir_p(STATE)
+FileUtils.mkdir_p(LOG_DIR)
+
+def run_cmd(cmd, timeout_sec = nil)
+  out = ''
+  code = 999
+  begin
+    runner = proc do
+      out, st = Open3.capture2e(*cmd)
+      code = st.exitstatus || 0
+    end
+    timeout_sec ? Timeout.timeout(timeout_sec, &runner) : runner.call
+  rescue Timeout::Error
+    out = "#{out}\ntimeout"
+    code = 997
+  rescue StandardError => e
+    out = e.message
+    code = 999
+  end
+  [code, out]
+end
+
+def helper(args)
+  env = {
+    'LC_ALL' => 'en_US.UTF-8',
+    'LANG' => 'en_US.UTF-8',
+    'AUTO_XRAY_RESOURCES' => RESOURCES
+  }
+  out, err, st = Open3.capture3(env, '/usr/bin/ruby', '-EUTF-8:UTF-8', CORE_HELPER, *args)
+  [st.exitstatus || 0, out.to_s, err.to_s]
+rescue StandardError => e
+  [999, '', e.message]
+end
+
+def print_helper_result(rc, out, err)
+  $stdout.write(out) unless out.empty?
+  $stderr.write(err) unless err.empty?
+  exit(rc.zero? ? 0 : rc)
+end
+
+def probe(index = 0)
+  url = PROBE_URLS[index.to_i % PROBE_URLS.length]
+  run_cmd([
+    '/usr/bin/curl',
+    '--silent', '--show-error',
+    '--connect-timeout', '4',
+    '--max-time', '6',
+    '--socks5-hostname', "127.0.0.1:#{SOCKS_PORT}",
+    '-o', '/dev/null',
+    '-w', '%{http_code} %{time_total}',
+    url
+  ], 8)
+end
+
+def probe_ok?(rc, out)
+  return false unless rc.zero?
+  code = out.to_s.strip.split.first.to_s
+  code == '204' || code == '200'
+end
+
+def log(message)
+  File.open(RUNTIME_LOG, 'a') do |f|
+    f.puts("[AUTO Xray supervisor] #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} #{message}")
+  end
+rescue StandardError
+end
+
+def process_alive?(pid)
+  return false unless pid.to_i > 0
+  Process.kill(0, pid.to_i)
+  true
+rescue StandardError
+  false
+end
+
+def stop_pid(pid)
+  return unless process_alive?(pid)
+  Process.kill('TERM', pid) rescue nil
+  16.times do
+    break unless process_alive?(pid)
+    sleep 0.25
+  end
+  Process.kill('KILL', pid) rescue nil if process_alive?(pid)
+rescue StandardError
+end
+
+def patch_runtime_probe
+  return unless File.file?(RUNTIME_CONFIG)
+  cfg = JSON.parse(File.read(RUNTIME_CONFIG, encoding: 'UTF-8'))
+  if cfg['observatory'].is_a?(Hash)
+    cfg['observatory']['probeURL'] = PROBE_URLS.first
+  end
+  File.write(RUNTIME_CONFIG, JSON.pretty_generate(cfg))
+rescue StandardError => e
+  log("could not patch runtime probe: #{e.message}")
+end
+
+def fallback_start
+  raise 'runtime config is missing' unless File.file?(RUNTIME_CONFIG)
+  raise 'Xray core is missing' unless File.executable?(XRAY)
+
+  patch_runtime_probe
+  last_error = ''
+
+  2.times do |attempt|
+    f = File.open(RUNTIME_LOG, 'a')
+    f.puts("\n=== SUPERVISOR START #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} attempt=#{attempt + 1} ===")
+    f.flush
+
+    pid = Process.spawn(XRAY, 'run', '-config', RUNTIME_CONFIG, out: f, err: f, pgroup: true)
+    sleep 1
+
+    unless process_alive?(pid)
+      last_error = 'Xray stopped immediately'
+      f.close
+      sleep 1
+      next
+    end
+
+    ok = false
+    6.times do |i|
+      rc, out = probe(i)
+      if probe_ok?(rc, out)
+        ok = true
+        last_error = out.to_s.strip
+        break
+      end
+      last_error = out.to_s.strip
+      sleep 2 if i < 5
+    end
+
+    if ok
+      File.write(PID_FILE, pid.to_s)
+      File.chmod(0o600, PID_FILE) rescue nil
+      f.puts("[AUTO Xray supervisor] startup probe OK: #{last_error}")
+      f.close
+
+      rc, out, err = helper(['ensure-proxy'])
+      raise(err.empty? ? out : err) unless rc.zero?
+
+      log('fallback start succeeded')
+      return true
+    end
+
+    f.puts("[AUTO Xray supervisor] startup probe failed: #{last_error}")
+    f.close
+    stop_pid(pid)
+    sleep 1
+  end
+
+  raise "proxy probe failed after automatic retry: #{last_error}"
+end
+
+def resilient_start
+  rc, out, err = helper(['start'])
+  return [rc, out, err] if rc.zero?
+
+  first_error = (err.empty? ? out : err).strip
+  log("normal start failed, trying supervisor recovery: #{first_error}")
+
+  begin
+    fallback_start
+    [0, "ON\n", '']
+  rescue StandardError => e
+    helper(['stop'])
+    [50, '', "ERROR: #{e.message}\n"]
+  end
+end
+
+def read_health
+  return { 'lastProbe' => 0, 'failures' => 0, 'lastRestart' => 0 } unless File.file?(HEALTH_FILE)
+  h = JSON.parse(File.read(HEALTH_FILE, encoding: 'UTF-8')) rescue {}
+  {
+    'lastProbe' => h['lastProbe'].to_i,
+    'failures' => h['failures'].to_i,
+    'lastRestart' => h['lastRestart'].to_i
+  }
+end
+
+def write_health(h)
+  File.write(HEALTH_FILE, JSON.pretty_generate(h))
+rescue StandardError
+end
+
+def supervisor_health
+  rc, out, err = helper(['ensure-proxy'])
+  return [rc, out, err] unless rc.zero?
+  return [0, out, err] if out.include?('IDLE')
+
+  now = Time.now.to_i
+  h = read_health
+  return [0, out, err] if now - h['lastProbe'] < HEALTH_INTERVAL
+
+  h['lastProbe'] = now
+  prc, pout = probe(h['failures'])
+
+  if probe_ok?(prc, pout)
+    log("connectivity recovered without restart: #{pout.strip}") if h['failures'] > 0
+    h['failures'] = 0
+    write_health(h)
+    return [0, out, err]
+  end
+
+  h['failures'] += 1
+  log("health probe failed ##{h['failures']}: #{pout.to_s.strip}")
+
+  if h['failures'] < FAILURES_BEFORE_RESTART || now - h['lastRestart'] < RESTART_COOLDOWN
+    write_health(h)
+    return [0, out, err]
+  end
+
+  h['lastRestart'] = now
+  write_health(h)
+  log('automatic recovery started')
+
+  helper(['stop'])
+  src, sout, serr = resilient_start
+
+  if src.zero?
+    h['failures'] = 0
+    h['lastProbe'] = Time.now.to_i
+    write_health(h)
+    log('automatic recovery succeeded')
+    [0, "OK\n", '']
+  else
+    log("automatic recovery failed: #{serr.empty? ? sout : serr}")
+    [0, "IDLE\n", '']
+  end
+end
+
+cmd = ARGV.shift.to_s
+args = ARGV.dup
+
+case cmd
+when 'start'
+  rc, out, err = resilient_start
+  print_helper_result(rc, out, err)
+when 'ensure-proxy'
+  rc, out, err = supervisor_health
+  print_helper_result(rc, out, err)
+when 'stop'
+  File.delete(HEALTH_FILE) rescue nil
+  rc, out, err = helper(['stop'] + args)
+  print_helper_result(rc, out, err)
+else
+  rc, out, err = helper([cmd] + args)
+  print_helper_result(rc, out, err)
+end
