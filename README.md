@@ -9,15 +9,15 @@ AUTO Xray создан для компьютеров, на которых сов
 
 ## Скачать
 
-Откройте последний релиз:
+Откройте последний стабильный релиз:
 
-**[AUTO Xray 2.5.1](https://github.com/eigenheit/auto-xray/releases/tag/v2.5.1)**
+**[AUTO Xray 2.5.2](https://github.com/eigenheit/auto-xray/releases/tag/v2.5.2)**
 
 Скачайте:
 
-**`AUTO_Xray_Catalina_Installer_v2.5.1.zip`**
+**`AUTO_Xray_Catalina_Installer_v2.5.2.zip`**
 
-Текущий выпуск помечен как **Pre-release** до дополнительной проверки установочного архива на реальном Catalina Mac.
+Релиз проверен на реальном Intel Mac с macOS Catalina.
 
 Не скачивайте AUTO Xray с посторонних сайтов и файловых обменников.
 
@@ -25,7 +25,7 @@ AUTO Xray создан для компьютеров, на которых сов
 
 ## Установка
 
-1. Скачайте `AUTO_Xray_Catalina_Installer_v2.5.1.zip` из GitHub Releases.
+1. Скачайте `AUTO_Xray_Catalina_Installer_v2.5.2.zip` из GitHub Releases.
 2. Распакуйте архив.
 3. Запустите:
 
