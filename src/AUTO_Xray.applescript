@@ -45,13 +45,12 @@ on run
 end run
 
 on idle
+	-- Health checks can run networksetup/curl for several seconds on Catalina.
+	-- Run them outside the AppleScript UI thread so the menu never freezes.
 	try
-		my runHelper("ensure-proxy")
+		my runHelperAsync("ensure-proxy")
 	end try
-	try
-		my refreshAll()
-	end try
-	return 5
+	return 15
 end idle
 
 on resourcesPath()
@@ -70,6 +69,11 @@ on runHelper(argsText)
 	set cmd to "/usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES=" & my shellQuoted(my resourcesPath()) & " /usr/bin/ruby -EUTF-8:UTF-8 " & my shellQuoted(my helperPath()) & " " & argsText
 	return do shell script cmd
 end runHelper
+
+on runHelperAsync(argsText)
+	set cmd to "/usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES=" & my shellQuoted(my resourcesPath()) & " /usr/bin/ruby -EUTF-8:UTF-8 " & my shellQuoted(my helperPath()) & " " & argsText & " </dev/null >/dev/null 2>&1 &"
+	do shell script cmd
+end runHelperAsync
 
 on parseJSONText(t)
 	set dataObj to (NSString's stringWithString:t)'s dataUsingEncoding:(current application's NSUTF8StringEncoding)
@@ -256,10 +260,8 @@ on toggleProxy_(sender)
 	try
 		if lastStateOn then
 			my runHelper("stop")
-			display dialog "AUTO Xray: OFF" buttons {"OK"} default button "OK" with title "AUTO Xray"
 		else
 			my runHelper("start")
-			display dialog "AUTO Xray: ON" buttons {"OK"} default button "OK" with title "AUTO Xray"
 		end if
 	on error errText
 		display dialog "Не удалось переключить AUTO Xray." & return & return & errText buttons {"OK"} default button "OK" with icon stop
@@ -312,7 +314,6 @@ on updateSubscription_(sender)
 	updateItem's setTitle:"Обновление..."
 	try
 		my runHelper("update --url " & my shellQuoted(newURL))
-		display dialog "Подписка обновлена." buttons {"OK"} default button "OK" with title "AUTO Xray"
 	on error errText
 		display dialog "Не удалось обновить подписку." & return & return & errText buttons {"OK"} default button "OK" with icon stop
 	end try
