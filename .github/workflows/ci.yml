@@ -58,7 +58,7 @@ jobs:
           test -n "$VERSION"
           grep -Fq 'sed -E "s/2\.5\.[0-9]+/${VERSION}/g"' scripts/install-catalina.command
           test -s assets/dove-clean.png.b64
-          base64 --decode assets/dove-clean.png.b64 > /tmp/dove-clean.png
+          /usr/bin/base64 -D -i assets/dove-clean.png.b64 -o /tmp/dove-clean.png
           file /tmp/dove-clean.png | grep -q 'PNG image data'
 
       - name: Scan tracked text for private runtime markers
