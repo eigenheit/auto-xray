@@ -1,0 +1,145 @@
+name: Create Draft Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build installer and create draft release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify official Xray-core 1.8.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .release/xray-download
+          curl -fL \
+            --retry 5 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            -o .release/Xray-macos-64.zip \
+            https://github.com/XTLS/Xray-core/releases/download/v1.8.4/Xray-macos-64.zip
+          unzip -q .release/Xray-macos-64.zip -d .release/xray-download
+          XRAY="$(find .release/xray-download -type f -name xray -print -quit)"
+          test -n "$XRAY"
+          EXPECTED="$(awk '{print $1}' vendor/xray/XRAY_SHA256.txt)"
+          ACTUAL="$(sha256sum "$XRAY" | awk '{print $1}')"
+          test "$ACTUAL" = "$EXPECTED"
+          mkdir -p .release/core
+          cp "$XRAY" .release/core/xray
+          chmod +x .release/core/xray
+
+      - name: Assemble standalone Catalina installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          NAME="AUTO_Xray_Catalina_Installer_v${VERSION}"
+          PKG="dist/$NAME"
+
+          mkdir -p "$PKG/src" "$PKG/assets" "$PKG/vendor/xray" "$PKG/scripts" "$PKG/docs"
+          cp VERSION "$PKG/VERSION"
+          cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
+          cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
+          cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
+          cp assets/dove-icon.png "$PKG/assets/dove-icon.png"
+          cp vendor/xray/XRAY_VERSION.txt "$PKG/vendor/xray/XRAY_VERSION.txt"
+          cp vendor/xray/XRAY_SHA256.txt "$PKG/vendor/xray/XRAY_SHA256.txt"
+          cp .release/core/xray "$PKG/vendor/xray/xray"
+          cp scripts/install-catalina.command "$PKG/scripts/install-catalina.command"
+          cp scripts/uninstall.command "$PKG/UNINSTALL_AUTO_XRAY.command"
+          cp docs/INSTALLATION.md "$PKG/docs/INSTALLATION.md"
+          cp docs/TROUBLESHOOTING.md "$PKG/docs/TROUBLESHOOTING.md"
+          cp docs/TELEGRAM.md "$PKG/docs/TELEGRAM.md"
+
+          cat > "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" <<'WRAPPER'
+          #!/bin/bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          exec /bin/bash scripts/install-catalina.command
+          WRAPPER
+
+          cat > "$PKG/README.txt" <<EOF
+          AUTO Xray ${VERSION} — Intel Mac / macOS Catalina
+          =================================================
+
+          1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
+          2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
+          3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
+          4. Выберите RF / EU / World → Включить.
+
+          Telegram: Use system proxy settings.
+
+          Не отключайте Gatekeeper глобально.
+          Подробности: docs/INSTALLATION.md
+          EOF
+
+          chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
+                   "$PKG/scripts/install-catalina.command" \
+                   "$PKG/UNINSTALL_AUTO_XRAY.command" \
+                   "$PKG/vendor/xray/xray"
+
+          (cd dist && zip -qry "${NAME}.zip" "$NAME")
+          (cd dist && sha256sum "${NAME}.zip" > SHA256SUMS.txt)
+
+      - name: Create release notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cat > dist/RELEASE_NOTES.md <<EOF
+          # AUTO Xray ${VERSION} — Catalina Intel
+
+          Standalone VLESS/Reality client for legacy Intel Macs.
+
+          **Проверенная система:** Intel Mac (x86_64), macOS Catalina 10.15.x.
+
+          ## Установка
+
+          1. Скачайте \`AUTO_Xray_Catalina_Installer_v${VERSION}.zip\`.
+          2. Распакуйте архив.
+          3. Запустите \`INSTALL_AUTO_XRAY_CATALINA.command\`.
+          4. Если Catalina показывает предупреждение: **Control + клик → Open / Открыть**.
+          5. Нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
+
+          Для Telegram выберите **Use system proxy settings**.
+
+          Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он не скачивается.
+
+          Перед публикацией этот релиз остается **Draft**, чтобы его можно было проверить на реальном Catalina Mac.
+          EOF
+
+      - name: Create or update draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          ZIP="dist/AUTO_Xray_Catalina_Installer_v${VERSION}.zip"
+          SUM="dist/SHA256SUMS.txt"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$SUM" --clobber
+            gh release edit "$TAG" --draft --title "AUTO Xray ${VERSION}" --notes-file dist/RELEASE_NOTES.md
+          else
+            gh release create "$TAG" "$ZIP" "$SUM" \
+              --draft \
+              --target "$GITHUB_SHA" \
+              --title "AUTO Xray ${VERSION}" \
+              --notes-file dist/RELEASE_NOTES.md
+          fi
