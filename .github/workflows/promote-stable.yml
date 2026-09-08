@@ -26,5 +26,33 @@ jobs:
           VERSION="$(tr -d '[:space:]' < VERSION)"
           TAG="v${VERSION}"
           gh release view "$TAG" >/dev/null
-          gh release edit "$TAG" --prerelease=false --draft=false --title "AUTO Xray ${VERSION}"
+
+          cat > /tmp/STABLE_RELEASE_NOTES.md <<EOF
+          # AUTO Xray ${VERSION} — Catalina Intel
+
+          Standalone VLESS/Reality client for legacy Intel Macs.
+
+          **Проверенная система:** Intel Mac (x86_64), macOS Catalina 10.15.x.
+
+          ## Установка
+
+          1. Скачайте \`AUTO_Xray_Catalina_Installer_v${VERSION}.zip\`.
+          2. Распакуйте архив.
+          3. Запустите \`INSTALL_AUTO_XRAY_CATALINA.command\`.
+          4. Если Catalina показывает предупреждение: **Control + клик → Open / Открыть**.
+          5. Нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
+
+          Для Telegram выберите **Use system proxy settings**.
+
+          Xray-core 1.8.4 уже находится внутри установочного архива. На пользовательском Mac он отдельно не скачивается.
+
+          **Статус:** Stable. Установщик, обновление подписки и работа системного proxy проверены на реальном Intel Mac с macOS Catalina.
+          EOF
+
+          gh release edit "$TAG" \
+            --prerelease=false \
+            --draft=false \
+            --title "AUTO Xray ${VERSION}" \
+            --notes-file /tmp/STABLE_RELEASE_NOTES.md
+
           echo "Promoted $TAG to stable."
