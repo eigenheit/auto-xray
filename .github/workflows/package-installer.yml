@@ -1,0 +1,121 @@
+name: Package Catalina Installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build standalone installer ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Packaging AUTO Xray $VERSION"
+
+      - name: Download official Xray-core 1.8.4 for Intel macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .package/xray-download
+          curl -fL \
+            --retry 5 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            -o .package/Xray-macos-64.zip \
+            https://github.com/XTLS/Xray-core/releases/download/v1.8.4/Xray-macos-64.zip
+          unzip -q .package/Xray-macos-64.zip -d .package/xray-download
+
+          XRAY="$(find .package/xray-download -type f -name xray -print -quit)"
+          test -n "$XRAY"
+          chmod +x "$XRAY"
+
+          EXPECTED="$(awk '{print $1}' vendor/xray/XRAY_SHA256.txt)"
+          ACTUAL="$(sha256sum "$XRAY" | awk '{print $1}')"
+          echo "Expected: $EXPECTED"
+          echo "Actual:   $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
+
+          mkdir -p .package/core
+          cp "$XRAY" .package/core/xray
+
+      - name: Assemble end-user installer package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          NAME="AUTO_Xray_Catalina_Installer_v${VERSION}"
+          PKG="dist/$NAME"
+
+          mkdir -p "$PKG/src" "$PKG/assets" "$PKG/vendor/xray" "$PKG/scripts" "$PKG/docs"
+
+          cp VERSION "$PKG/VERSION"
+          cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
+          cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
+          cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
+          cp assets/dove-icon.png "$PKG/assets/dove-icon.png"
+          cp vendor/xray/XRAY_VERSION.txt "$PKG/vendor/xray/XRAY_VERSION.txt"
+          cp vendor/xray/XRAY_SHA256.txt "$PKG/vendor/xray/XRAY_SHA256.txt"
+          cp .package/core/xray "$PKG/vendor/xray/xray"
+          cp scripts/install-catalina.command "$PKG/scripts/install-catalina.command"
+          cp scripts/uninstall.command "$PKG/UNINSTALL_AUTO_XRAY.command"
+          cp docs/INSTALLATION.md "$PKG/docs/INSTALLATION.md"
+          cp docs/TROUBLESHOOTING.md "$PKG/docs/TROUBLESHOOTING.md"
+          cp docs/TELEGRAM.md "$PKG/docs/TELEGRAM.md"
+
+          cat > "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" <<'WRAPPER'
+          #!/bin/bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          exec /bin/bash scripts/install-catalina.command
+          WRAPPER
+
+          cat > "$PKG/README.txt" <<EOF
+          AUTO Xray ${VERSION} — Intel Mac / macOS Catalina
+          =================================================
+
+          Быстрая установка:
+          1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
+          2. Если macOS блокирует запуск: Control + клик по файлу → Open / Открыть.
+          3. После установки в строке меню появится голубь 🕊.
+          4. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
+          5. Выберите RF / EU / World → Включить.
+
+          Telegram:
+          Settings → Advanced → Connection type → Proxy settings → Use system proxy settings.
+
+          Подробная инструкция находится в docs/INSTALLATION.md.
+          Не отключайте Gatekeeper глобально.
+          EOF
+
+          chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command"
+          chmod +x "$PKG/scripts/install-catalina.command"
+          chmod +x "$PKG/UNINSTALL_AUTO_XRAY.command"
+          chmod +x "$PKG/vendor/xray/xray"
+
+          (cd dist && zip -qry "${NAME}.zip" "$NAME")
+          sha256sum "dist/${NAME}.zip" > dist/SHA256SUMS.txt
+
+          echo "Package: dist/${NAME}.zip"
+          cat dist/SHA256SUMS.txt
+
+      - name: Upload packaged installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AUTO-Xray-Catalina-Installer-${{ steps.version.outputs.version }}
+          path: |
+            dist/AUTO_Xray_Catalina_Installer_v${{ steps.version.outputs.version }}.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
