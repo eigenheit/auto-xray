@@ -67,7 +67,7 @@ on shellQuoted(t)
 end shellQuoted
 
 on runHelper(argsText)
-	set cmd to "/usr/bin/env AUTO_XRAY_RESOURCES=" & my shellQuoted(my resourcesPath()) & " /usr/bin/ruby " & my shellQuoted(my helperPath()) & " " & argsText
+	set cmd to "/usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES=" & my shellQuoted(my resourcesPath()) & " /usr/bin/ruby -EUTF-8:UTF-8 " & my shellQuoted(my helperPath()) & " " & argsText
 	return do shell script cmd
 end runHelper
 
@@ -94,7 +94,7 @@ on setupMenu()
 	
 	set statusMenu to NSMenu's alloc()'s initWithTitle:"AUTO Xray"
 	
-	set stateItem to NSMenuItem's alloc()'s initWithTitle:"AUTO Xray 2.5.1: проверка..." action:(missing value) keyEquivalent:""
+	set stateItem to NSMenuItem's alloc()'s initWithTitle:"AUTO Xray 2.5.2: проверка..." action:(missing value) keyEquivalent:""
 	stateItem's setEnabled:false
 	statusMenu's addItem:stateItem
 	
@@ -137,7 +137,7 @@ on setupMenu()
 	logItem's setTarget:me
 	statusMenu's addItem:logItem
 	
-	set versionItem to NSMenuItem's alloc()'s initWithTitle:"Версия 2.5.1 · Catalina Intel" action:(missing value) keyEquivalent:""
+	set versionItem to NSMenuItem's alloc()'s initWithTitle:"Версия 2.5.2 · Catalina Intel" action:(missing value) keyEquivalent:""
 	versionItem's setEnabled:false
 	statusMenu's addItem:versionItem
 	
@@ -186,10 +186,10 @@ on refreshAll()
 	my setDoveState(lastStateOn)
 	
 	if lastStateOn then
-		stateItem's setTitle:"AUTO Xray 2.5.1: ON · " & modeLabel
+		stateItem's setTitle:"AUTO Xray 2.5.2: ON · " & modeLabel
 		toggleItem's setTitle:"Выключить"
 	else
-		stateItem's setTitle:"AUTO Xray 2.5.1: OFF · " & modeLabel
+		stateItem's setTitle:"AUTO Xray 2.5.2: OFF · " & modeLabel
 		toggleItem's setTitle:"Включить"
 	end if
 	

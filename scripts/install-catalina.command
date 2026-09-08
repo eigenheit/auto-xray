@@ -9,7 +9,7 @@ HELPER="src/auto-xray-helper.rb"
 XRAY="vendor/xray/xray"
 ICON="assets/dove-icon.png"
 NOTICE="THIRD_PARTY_NOTICES.txt"
-EXPECTED_SHA="25ab858d6a6d763c3bf98d21a9c26571a58d807a857b273e49d6b824c4cb4f39"
+EXPECTED_SHA="25ab858d6a6d763c3bf98d21a9c26571a58d807a857b273e49d6b824c4f39"
 TMP="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/auto-xray-install.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 ICONSET="$TMP/DoveIcon.iconset"
@@ -20,10 +20,11 @@ fail() { echo; echo "ERROR: $1"; echo; exit 1; }
 [ -f "$ICON" ] || fail "В пакете отсутствует иконка AUTO Xray."
 ACTUAL_SHA="$(/usr/bin/shasum -a 256 "$XRAY" | /usr/bin/awk '{print $1}')"
 [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || fail "Встроенный Xray-core поврежден."
-/usr/bin/ruby -c "$HELPER" >/dev/null || fail "Ruby helper поврежден."
+/usr/bin/ruby -EUTF-8:UTF-8 -c "$HELPER" >/dev/null || fail "Ruby helper поврежден."
 
 if [ -f "$APP_DIR/Contents/Resources/auto-xray-helper.rb" ]; then
-  AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" /usr/bin/ruby "$APP_DIR/Contents/Resources/auto-xray-helper.rb" stop >/dev/null 2>&1 || true
+  /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" \
+    /usr/bin/ruby -EUTF-8:UTF-8 "$APP_DIR/Contents/Resources/auto-xray-helper.rb" stop >/dev/null 2>&1 || true
 fi
 /usr/bin/osascript -e 'tell application "AUTO Xray" to quit' >/dev/null 2>&1 || true
 sleep 1
@@ -61,5 +62,34 @@ PLIST="$APP_DIR/Contents/Info.plist"
 
 /usr/bin/codesign --force --sign - "$APP_DIR/Contents/Resources/xray" >/dev/null 2>&1 || true
 /usr/bin/codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
-AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" /usr/bin/ruby "$APP_DIR/Contents/Resources/auto-xray-helper.rb" bootstrap >/dev/null || fail "Первичная настройка не выполнена."
+/usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" \
+  /usr/bin/ruby -EUTF-8:UTF-8 "$APP_DIR/Contents/Resources/auto-xray-helper.rb" bootstrap >/dev/null || fail "Первичная настройка не выполнена."
+
+CURRENT_TTY="$(/usr/bin/tty 2>/dev/null || true)"
 /usr/bin/open "$APP_DIR"
+/usr/bin/osascript -e 'display dialog "AUTO Xray установлен и запущен." buttons {"OK"} default button "OK" with title "AUTO Xray"' >/dev/null 2>&1 || true
+
+# When the installer was opened by double-click in Finder, Terminal otherwise leaves
+# a completed window on screen. Close only the Terminal window that owns this TTY.
+if [[ "$CURRENT_TTY" == /dev/ttys* ]]; then
+  (
+    /bin/sleep 1
+    /usr/bin/osascript - "$CURRENT_TTY" <<'APPLESCRIPT'
+on run argv
+  set targetTTY to item 1 of argv
+  tell application "Terminal"
+    repeat with w in windows
+      try
+        if (tty of selected tab of w as text) is targetTTY then
+          close w
+          return
+        end if
+      end try
+    end repeat
+  end tell
+end run
+APPLESCRIPT
+  ) >/dev/null 2>&1 &
+fi
+
+exit 0
