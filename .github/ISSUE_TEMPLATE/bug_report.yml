@@ -1,0 +1,52 @@
+name: Ошибка / Bug report
+description: Сообщить о проблеме AUTO Xray
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Не публикуйте URL подписки, UUID, Reality keys, токены или пароли.
+  - type: input
+    id: mac
+    attributes:
+      label: Модель Mac
+      placeholder: iMac 21.5-inch Late 2013
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: Версия macOS
+      placeholder: 10.15.7 / 10.15.8
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия AUTO Xray
+      placeholder: 2.5.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Способ установки
+      options:
+        - DMG
+        - Catalina Installer
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Что произошло
+      description: Опишите шаги и фактическое поведение.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Текст ошибки / безопасный фрагмент лога
+      description: Удалите приватные данные перед публикацией.
