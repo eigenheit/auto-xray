@@ -1,0 +1,10 @@
+AUTO Xray includes Xray-core v1.8.4 for Intel macOS.
+
+Xray-core
+Copyright: XTLS/Xray-core contributors
+License: Mozilla Public License 2.0 (MPL-2.0)
+Source: https://github.com/XTLS/Xray-core
+Release: https://github.com/XTLS/Xray-core/releases/tag/v1.8.4
+License text: https://www.mozilla.org/MPL/2.0/
+
+The Xray-core binary is bundled with the AUTO Xray release so installation on legacy Macs does not require downloading the core separately.
