@@ -1,0 +1,48 @@
+name: Report CI Failure
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Package Catalina Installer
+      - Publish Pre-release
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="CI failure: ${WORKFLOW}"
+          BODY=$(cat <<EOF
+          Automatic check failed.
+
+          - Workflow: ${WORKFLOW}
+          - Conclusion: ${CONCLUSION}
+          - Commit: ${SHA}
+          - Run: ${RUN_URL}
+
+          Review the failed step before the next release.
+          EOF
+          )
+
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$TITLE in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+          fi
