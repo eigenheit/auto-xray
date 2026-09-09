@@ -1,105 +1,108 @@
-# 🕊 AUTO Xray
+<p align="center">
+  <img src="assets/dove-icon.png" width="96" alt="AUTO Xray dove icon">
+</p>
 
-Легкий VLESS/Reality-клиент для старых Intel Mac.
+<h1 align="center">AUTO Xray</h1>
 
-AUTO Xray создан для компьютеров, на которых современные VPN/VLESS-клиенты уже не устанавливаются. Программа работает из строки меню macOS и использует вашу собственную VLESS-подписку.
+<p align="center">
+  Легкий VLESS/Reality-клиент для старых Intel Mac, которым современные клиенты уже не подходят.
+</p>
 
-> **Проверенная конфигурация:** Intel Mac (`x86_64`) + macOS Catalina 10.15.x.  
+<p align="center">
+  <img alt="Stable release" src="https://img.shields.io/github/v/release/eigenheit/auto-xray?label=stable">
+  <img alt="macOS Catalina" src="https://img.shields.io/badge/macOS-Catalina%2010.15-000000?logo=apple&logoColor=white">
+  <img alt="Intel x86_64" src="https://img.shields.io/badge/Intel-x86__64-0071C5?logo=intel&logoColor=white">
+  <img alt="CI" src="https://github.com/eigenheit/auto-xray/actions/workflows/ci.yml/badge.svg">
+</p>
+
+> **Проверено на реальном Mac:** Intel `x86_64` + macOS Catalina 10.15.x.  
 > Для Apple Silicon (M1/M2/M3/M4) этот релиз не предназначен.
 
 ## Скачать
 
-Откройте последний стабильный релиз:
+**Текущая стабильная версия: AUTO Xray 2.5.7**
 
-**[AUTO Xray 2.5.7](https://github.com/eigenheit/auto-xray/releases/tag/v2.5.7)**
+[**Скачать DMG — рекомендуется**](https://github.com/eigenheit/auto-xray/releases/download/v2.5.7/AUTO_Xray_Catalina_v2.5.7.dmg)
 
-Основной вариант установки:
-
-**`AUTO_Xray_Catalina_v2.5.7.dmg`**
-
-Резервный вариант:
-
-**`AUTO_Xray_Catalina_Installer_v2.5.7.zip`**
-
-Релиз проверен на реальном Intel Mac с macOS Catalina.
+Резервный вариант: [ZIP-инсталлятор](https://github.com/eigenheit/auto-xray/releases/download/v2.5.7/AUTO_Xray_Catalina_Installer_v2.5.7.zip) · [SHA256SUMS.txt](https://github.com/eigenheit/auto-xray/releases/download/v2.5.7/SHA256SUMS.txt)
 
 Не скачивайте AUTO Xray с посторонних сайтов и файловых обменников.
 
----
+## Что умеет
+
+- VLESS + Reality через встроенный **Xray-core 1.8.4**;
+- автоматический выбор наиболее быстрого доступного узла внутри групп **RF / EU / World**;
+- ручной выбор конкретного сервера;
+- HTTP/HTTPS proxy `127.0.0.1:9001` и SOCKS5 `127.0.0.1:2081`;
+- автоматическая настройка системного proxy macOS;
+- восстановление соединения после отключения и повторного подключения Wi-Fi;
+- защита от зависших локальных proxy после выключения клиента;
+- обновление VLESS-подписки прямо из меню;
+- запуск из строки меню и автоматический старт после входа в macOS;
+- сохранение подписки, HWID и настроек при обновлении программы.
+
+AUTO Xray работает как **system proxy client**, а не как TUN/Network Extension VPN. Приложения, которые игнорируют системные proxy-настройки macOS, могут не использовать AUTO Xray.
 
 ## Установка через DMG
 
-1. Скачайте `AUTO_Xray_Catalina_v2.5.7.dmg` из GitHub Releases.
-2. Откройте DMG.
-3. Найдите **Install AUTO Xray.app**.
-4. Нажмите `Control + клик → Open / Открыть`.
-5. На Catalina первое предупреждение может **не дать открыть приложение** и показать только кнопки вроде **Move to Trash / Переместить в Корзину** и **Cancel / Отменить**. В этом случае нажмите **Cancel / Отменить**.
-6. Снова выполните `Control + клик → Open / Открыть` на **Install AUTO Xray.app**.
-7. Появится второе системное предупреждение, уже с кнопкой **Open / Открыть**. Нажмите ее.
-8. Установка начнется автоматически. После завершения в строке меню появится голубь **🕊**.
+1. Скачайте `AUTO_Xray_Catalina_v2.5.7.dmg`.
+2. Откройте DMG и найдите **Install AUTO Xray.app**.
+3. Выполните `Control + клик → Open / Открыть`.
+4. На Catalina первое предупреждение может **не дать открыть приложение** и показать только **Move to Trash / Переместить в Корзину** и **Cancel / Отменить**. Нажмите **Cancel / Отменить**.
+5. Повторите `Control + клик → Open / Открыть` на **Install AUTO Xray.app**.
+6. Появится второе системное предупреждение, уже с кнопкой **Open / Открыть**. Нажмите ее.
+7. Установка начнется автоматически. После завершения в строке меню появится голубь **🕊**.
 
-После установки AUTO Xray запускается в состоянии **OFF**, поэтому обычный интернет должен продолжить работать напрямую.
+После установки AUTO Xray находится в состоянии **OFF**, поэтому обычный интернет должен работать напрямую.
 
-Подробно: [Установка и системные предупреждения](docs/INSTALLATION.md).
-
----
+Подробная инструкция: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Первый запуск
 
-Нажмите на **🕊**:
+Нажмите **🕊** и выполните:
 
-1. **Обновить подписку**
-2. вставьте HTTPS-ссылку вашей VLESS-подписки
-3. выберите:
-   - **Автовыбор · RF**
-   - **Автовыбор · EU**
-   - **Автовыбор · World**
-   - или конкретный сервер через **Ручной выбор**
-4. нажмите **Включить**
+1. **Обновить подписку** → вставьте HTTPS-ссылку вашей VLESS-подписки.
+2. Выберите **Автовыбор · RF**, **Автовыбор · EU**, **Автовыбор · World** или конкретный сервер через **Ручной выбор**.
+3. Нажмите **Включить**.
 
-Яркий голубь **🕊** — AUTO Xray включен.  
-Полупрозрачный голубь — выключен.
+Яркий голубь **🕊** означает `ON`, полупрозрачный — `OFF`.
 
-AUTO Xray автоматически выбирает наиболее быстрый доступный узел внутри выбранной группы.
+## Как это работает
 
----
+```mermaid
+flowchart LR
+    A[VLESS subscription] --> B[AUTO Xray parser]
+    B --> C[nodes.json]
+    C --> D[Xray-core 1.8.4]
+    D --> E[SOCKS5 :2081]
+    D --> F[HTTP/HTTPS :9001]
+    E --> G[macOS system proxy]
+    F --> G
+    G --> H[Applications]
+```
+
+AUTO Xray следит за состоянием Xray и системного proxy. Если Wi-Fi пропал и вернулся, supervisor проверяет доступность proxy и при необходимости восстанавливает его без ручного перезапуска приложения.
 
 ## Telegram
 
-В Telegram Desktop:
+В Telegram Desktop выберите:
 
 **Settings → Advanced → Connection type → Proxy settings → Use system proxy settings**
 
-Отдельный SOCKS-прокси в Telegram вводить не нужно.
+Отдельный SOCKS от старого V2RayXS вводить не нужно.
 
----
+## Ограничения
 
-## Если macOS не разрешает открыть AUTO Xray
+- официальный проверенный target — **Intel Mac + macOS Catalina 10.15.x**;
+- приложение пока не подписано Apple Developer ID и не notarized, поэтому при первом запуске требуется штатное исключение Gatekeeper;
+- AUTO Xray не создает системный TUN-интерфейс и не перехватывает приложения, игнорирующие system proxy;
+- публичный релиз использует Xray-core 1.8.4, выбранный ради совместимости с Catalina.
 
-AUTO Xray пока распространяется без Apple Developer ID/notarization, поэтому Catalina может показать предупреждение о неизвестном разработчике.
+Если macOS пишет **“will damage your computer / повредит компьютер”**, сообщает о malware или автоматически перемещает файл в Корзину как вредоносный, **не обходите это предупреждение**. Удалите файл и скачайте релиз заново с официальной страницы GitHub.
 
-Используйте штатный способ macOS:
+## Данные и приватность
 
-1. `Control + клик` по **Install AUTO Xray.app**.
-2. Выберите **Open / Открыть**.
-3. Если первое окно не предлагает кнопку **Open / Открыть**, нажмите **Cancel / Отменить**.
-4. Повторите `Control + клик → Open / Открыть`.
-5. Во втором предупреждении нажмите **Open / Открыть**.
-6. Если Catalina все равно блокирует запуск: **System Preferences → Security & Privacy → General → Open Anyway / Все равно открыть**.
-
-Обычно это требуется только один раз.
-
-> Не отключайте Gatekeeper целиком и не используйте `spctl --master-disable`.
-
-Если macOS пишет **“will damage your computer / повредит компьютер”**, сообщает об обнаруженном вредоносном ПО или автоматически перемещает файл в Корзину как malware, не обходите предупреждение: удалите файл и скачайте релиз заново только с официальной страницы GitHub.
-
-Подробно: [INSTALLATION.md](docs/INSTALLATION.md).
-
----
-
-## Где хранятся данные
-
-Настройки, подписка и JSON:
+Настройки и данные хранятся локально:
 
 ```text
 ~/Library/Application Support/AUTO Xray/
@@ -111,53 +114,40 @@ AUTO Xray пока распространяется без Apple Developer ID/no
 ~/Library/Logs/AUTO Xray/
 ```
 
-Desktop программа не засоряет.
+AUTO Xray не требует аккаунта. Во время работы программа обращается к указанной вами subscription URL, выбранным proxy-узлам и к служебным connectivity-check URL для проверки работоспособности соединения.
 
----
+Подробнее: [docs/PRIVACY.md](docs/PRIVACY.md) · [SECURITY.md](SECURITY.md)
 
-## Удаление
+## Безопасность релиза
 
-В резервном ZIP-архиве есть:
-
-```text
-UNINSTALL_AUTO_XRAY.command
-```
-
-При удалении можно сохранить подписку и настройки либо удалить все данные полностью.
-
----
-
-## Безопасность
-
-В каждом релизе публикуется `SHA256SUMS.txt`.
-
-Перед первым запуском:
-
-- скачивайте файлы только из **GitHub Releases** этого репозитория;
-- при необходимости сверяйте SHA-256;
-- не публикуйте в Issues URL подписки, UUID, Reality keys, HWID и пароли;
-- не отключайте системную защиту macOS глобально.
-
-Подробнее: [SECURITY.md](SECURITY.md)
-
----
-
-## Что внутри
-
-AUTO Xray использует встроенный **Xray-core 1.8.4** для Intel macOS.
-
-Xray-core проверяется по SHA-256 перед включением в релиз. На пользовательском Mac core уже находится внутри установочного пакета и отдельно не скачивается.
+- Xray-core проверяется по фиксированному SHA-256 перед упаковкой;
+- каждый релиз содержит `SHA256SUMS.txt`;
+- CI проверяет shell/Ruby/AppleScript, согласованность версии и отсутствие приватных runtime-маркеров;
+- DMG собирается автоматически из того же ZIP payload, который публикуется в релизе.
 
 Проект не связан с Apple и не является официальным клиентом Xray.
 
-Сведения о сторонних компонентах: `THIRD_PARTY_NOTICES.txt`.
-
----
-
 ## Помощь
 
-[Решение проблем](docs/TROUBLESHOOTING.md)
+- [Установка](docs/INSTALLATION.md)
+- [Решение проблем](docs/TROUBLESHOOTING.md)
+- [Telegram](docs/TELEGRAM.md)
+- [FAQ](docs/FAQ.md)
+- [Security](SECURITY.md)
 
-При создании GitHub Issue укажите модель Mac, версию macOS, версию AUTO Xray и точный текст ошибки.
+При создании GitHub Issue укажите модель Mac, версию macOS, версию AUTO Xray и точный текст ошибки. Не публикуйте URL подписки, UUID, Reality keys, HWID и пароли.
 
-Не публикуйте приватную ссылку подписки и ключи доступа.
+## Для разработчиков
+
+Основные компоненты:
+
+```text
+src/AUTO_Xray.applescript      menu-bar UI
+src/auto-xray-helper.rb        subscription, config, proxy control
+src/auto-xray-supervisor.rb    watchdog and recovery
+scripts/                       installers and maintenance
+.github/workflows/             CI and release automation
+vendor/xray/                   pinned Xray metadata
+```
+
+Сведения о сторонних компонентах: [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
