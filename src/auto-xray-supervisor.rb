@@ -26,6 +26,7 @@ LOG_DIR = File.join(HOME_DIR, 'Library', 'Logs', 'AUTO Xray')
 RUNTIME_CONFIG = File.join(STATE, 'runtime_config.json')
 PID_FILE = File.join(STATE, 'xray.pid')
 HEALTH_FILE = File.join(STATE, 'supervisor-health.json')
+LOCK_FILE = File.join(STATE, 'supervisor.lock')
 RUNTIME_LOG = File.join(LOG_DIR, 'runtime.log')
 
 FileUtils.mkdir_p(STATE)
@@ -68,6 +69,20 @@ def print_helper_result(rc, out, err)
   exit(rc.zero? ? 0 : rc)
 end
 
+def with_runtime_lock(nonblocking: false)
+  lock = File.open(LOCK_FILE, File::RDWR | File::CREAT, 0o600)
+  flags = File::LOCK_EX
+  flags |= File::LOCK_NB if nonblocking
+  acquired = lock.flock(flags)
+  return nil unless acquired
+  begin
+    yield
+  ensure
+    lock.flock(File::LOCK_UN) rescue nil
+    lock.close rescue nil
+  end
+end
+
 def probe(index = 0)
   url = PROBE_URLS[index.to_i % PROBE_URLS.length]
   run_cmd([
@@ -101,6 +116,22 @@ def process_alive?(pid)
   true
 rescue StandardError
   false
+end
+
+def process_command(pid)
+  rc, out = run_cmd(['/bin/ps', '-p', pid.to_i.to_s, '-o', 'command='], 5)
+  rc.zero? ? out.strip : ''
+end
+
+def our_xray_process?(pid)
+  cmd = process_command(pid)
+  !cmd.empty? && (cmd.include?(RUNTIME_CONFIG) || cmd.include?(XRAY) || cmd.include?('AUTO Xray.app/Contents/Resources/xray'))
+end
+
+def listener_pids(port)
+  rc, out = run_cmd(['/usr/sbin/lsof', '-nP', '-tiTCP:' + port.to_i.to_s, '-sTCP:LISTEN'], 5)
+  return [] unless rc.zero?
+  out.lines.map { |line| line.to_i }.select { |pid| pid > 0 }.uniq
 end
 
 def core_running?
@@ -170,12 +201,30 @@ end
 def stop_pid(pid)
   return unless process_alive?(pid)
   Process.kill('TERM', pid) rescue nil
-  16.times do
+  24.times do
     break unless process_alive?(pid)
     sleep 0.25
   end
   Process.kill('KILL', pid) rescue nil if process_alive?(pid)
+  Process.wait(pid) rescue nil
 rescue StandardError
+end
+
+def cleanup_orphan_runtime
+  pids = (listener_pids(SOCKS_PORT) + listener_pids(HTTP_PORT)).uniq
+  ours = pids.select { |pid| our_xray_process?(pid) }
+  return if ours.empty?
+
+  log("cleaning orphan Xray listeners: #{ours.join(',')}")
+  ours.each { |pid| stop_pid(pid) }
+
+  20.times do
+    remaining = (listener_pids(SOCKS_PORT) + listener_pids(HTTP_PORT)).uniq.select { |pid| our_xray_process?(pid) }
+    return if remaining.empty?
+    sleep 0.25
+  end
+rescue StandardError => e
+  log("orphan runtime cleanup failed: #{e.message}")
 end
 
 def patch_runtime_probe
@@ -197,6 +246,8 @@ def fallback_start
   last_error = ''
 
   2.times do |attempt|
+    cleanup_orphan_runtime
+
     f = File.open(RUNTIME_LOG, 'a')
     f.puts("\n=== SUPERVISOR START #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} attempt=#{attempt + 1} ===")
     f.flush
@@ -207,6 +258,7 @@ def fallback_start
     unless process_alive?(pid)
       last_error = 'Xray stopped immediately'
       f.close
+      cleanup_orphan_runtime
       sleep 1
       next
     end
@@ -239,6 +291,7 @@ def fallback_start
     f.puts("[AUTO Xray supervisor] startup probe failed: #{last_error}")
     f.close
     stop_pid(pid)
+    cleanup_orphan_runtime
     sleep 1
   end
 
@@ -258,10 +311,14 @@ def resilient_start
   log("normal start failed, trying supervisor recovery: #{first_error}")
 
   begin
+    # The core helper may have sent TERM after a failed startup probe but not yet
+    # released 2081/9001. Remove only AUTO Xray listeners before retrying.
+    cleanup_orphan_runtime
     fallback_start
     [0, "ON\n", '']
   rescue StandardError => e
     helper(['stop'])
+    cleanup_orphan_runtime
     disable_stale_auto_proxies
     [50, '', "ERROR: #{e.message}\n"]
   end
@@ -317,6 +374,7 @@ def supervisor_health
   log('automatic recovery started')
 
   helper(['stop'])
+  cleanup_orphan_runtime
   disable_stale_auto_proxies
   src, sout, serr = resilient_start
 
@@ -337,17 +395,29 @@ args = ARGV.dup
 
 case cmd
 when 'start'
-  rc, out, err = resilient_start
-  print_helper_result(rc, out, err)
+  result = with_runtime_lock { resilient_start }
+  print_helper_result(*result)
 when 'ensure-proxy'
-  rc, out, err = supervisor_health
-  print_helper_result(rc, out, err)
+  result = with_runtime_lock(nonblocking: true) { supervisor_health }
+  # A user action is already switching/stopping/starting the runtime. The
+  # background watchdog must get out of the way instead of racing it.
+  result ||= [0, "BUSY\n", '']
+  print_helper_result(*result)
 when 'stop'
-  File.delete(HEALTH_FILE) rescue nil
-  rc, out, err = helper(['stop'] + args)
-  disable_stale_auto_proxies
-  print_helper_result(rc, out, err)
+  result = with_runtime_lock do
+    File.delete(HEALTH_FILE) rescue nil
+    rc, out, err = helper(['stop'] + args)
+    cleanup_orphan_runtime
+    disable_stale_auto_proxies
+    [rc, out, err]
+  end
+  print_helper_result(*result)
 else
-  rc, out, err = helper([cmd] + args)
-  print_helper_result(rc, out, err)
+  mutating = %w[mode update bootstrap install-login-agent uninstall-login-agent].include?(cmd)
+  result = if mutating
+             with_runtime_lock { helper([cmd] + args) }
+           else
+             helper([cmd] + args)
+           end
+  print_helper_result(*result)
 end
