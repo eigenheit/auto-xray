@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           VERSION="$(tr -d '[:space:]' < VERSION)"
           GENERATED="/tmp/AUTO_Xray.generated.applescript"
-          sed -E "s/2\\.5\\.[0-9]+/${VERSION}/g" src/AUTO_Xray.applescript > "$GENERATED"
+          sed -E "s/2\.5\.[0-9]+/${VERSION}/g" src/AUTO_Xray.applescript > "$GENERATED"
           rm -rf "/tmp/AUTO Xray.app"
           /usr/bin/osacompile -s -o "/tmp/AUTO Xray.app" "$GENERATED"
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
@@ -65,7 +65,7 @@ jobs:
           grep -Fq 'LOCK_FILE = File.join(STATE, '\''supervisor.lock'\'')' src/auto-xray-supervisor.rb
           grep -Fq 'with_runtime_lock(nonblocking: true)' src/auto-xray-supervisor.rb
           grep -Fq 'cleanup_orphan_runtime' src/auto-xray-supervisor.rb
-          grep -Fq 'BUSY\\n' src/auto-xray-supervisor.rb
+          grep -Fq 'BUSY\n' src/auto-xray-supervisor.rb
 
       - name: Validate Xray metadata
         shell: bash
