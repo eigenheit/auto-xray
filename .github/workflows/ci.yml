@@ -58,6 +58,15 @@ jobs:
             exit 1
           fi
 
+      - name: Guard serialized runtime recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'LOCK_FILE = File.join(STATE, '\''supervisor.lock'\'')' src/auto-xray-supervisor.rb
+          grep -Fq 'with_runtime_lock(nonblocking: true)' src/auto-xray-supervisor.rb
+          grep -Fq 'cleanup_orphan_runtime' src/auto-xray-supervisor.rb
+          grep -Fq 'BUSY\\n' src/auto-xray-supervisor.rb
+
       - name: Validate Xray metadata
         shell: bash
         run: |
