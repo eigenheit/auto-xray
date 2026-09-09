@@ -143,6 +143,7 @@ jobs:
           python3 - <<'PY'
           import hashlib
           import os
+          import re
           import stat
           import zipfile
           from pathlib import Path
@@ -158,6 +159,8 @@ jobs:
               ):
                   actual = archive.read(f"{name}/{relative}")
                   expected = Path(relative).read_bytes()
+                  if relative == "src/AUTO_Xray.applescript":
+                      expected = re.sub(rb"2\.5\.[0-9]+", os.environ["VERSION"].encode(), expected)
                   assert actual == expected, f"Stale packaged file: {relative}"
               for relative, original in (
                   ("assets/Dove.icns", ".release/Dove.icns"),
