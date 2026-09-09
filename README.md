@@ -43,6 +43,23 @@
 
 AUTO Xray работает как **system proxy client**, а не как TUN/Network Extension VPN. Приложения, которые игнорируют системные proxy-настройки macOS, могут не использовать AUTO Xray.
 
+## Как выглядит
+
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="assets/screenshots/menubar.jpg" width="392" alt="AUTO Xray in the macOS Catalina menu bar"><br>
+      <sub>AUTO Xray в строке меню macOS Catalina</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="assets/screenshots/dmg-installer.jpg" width="431" alt="AUTO Xray DMG installer window on macOS Catalina"><br>
+      <sub>DMG после открытия: Install AUTO Xray.app</sub>
+    </td>
+  </tr>
+</table>
+
+Оба скриншота сделаны на реальном Intel Mac с macOS Catalina.
+
 ## Установка через DMG
 
 1. Скачайте `AUTO_Xray_Catalina_v2.5.7.dmg`.
