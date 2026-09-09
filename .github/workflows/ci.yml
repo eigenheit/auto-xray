@@ -47,6 +47,17 @@ jobs:
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
           grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
+      - name: Guard responsive menu and quiet ZIP install
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'my runHelperAsync("ensure-proxy")' src/AUTO_Xray.applescript
+          grep -Fq 'return 15' src/AUTO_Xray.applescript
+          if grep -Fq 'AUTO Xray установлен и запущен.' scripts/install-catalina.command; then
+            echo 'ZIP installer must not show a success modal.' >&2
+            exit 1
+          fi
+
       - name: Validate Xray metadata
         shell: bash
         run: |
