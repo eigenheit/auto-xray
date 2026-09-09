@@ -45,18 +45,15 @@ AUTO Xray работает как **system proxy client**, а не как TUN/Ne
 
 ## Как выглядит
 
-<table>
-  <tr>
-    <td align="center" valign="top">
-      <img src="assets/screenshots/menubar.jpg" width="392" alt="AUTO Xray in the macOS Catalina menu bar"><br>
-      <sub>AUTO Xray в строке меню macOS Catalina</sub>
-    </td>
-    <td align="center" valign="top">
-      <img src="assets/screenshots/dmg-installer.jpg" width="431" alt="AUTO Xray DMG installer window on macOS Catalina"><br>
-      <sub>DMG после открытия: Install AUTO Xray.app</sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/eigenheit/auto-xray/main/assets/screenshots/menubar.jpg" width="392" alt="AUTO Xray в строке меню macOS Catalina">
+</p>
+<p align="center"><sub>AUTO Xray в строке меню macOS Catalina</sub></p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/eigenheit/auto-xray/main/assets/screenshots/dmg-installer.jpg" width="431" alt="DMG AUTO Xray на macOS Catalina">
+</p>
+<p align="center"><sub>DMG после открытия: Install AUTO Xray.app</sub></p>
 
 Оба скриншота сделаны на реальном Intel Mac с macOS Catalina.
 
