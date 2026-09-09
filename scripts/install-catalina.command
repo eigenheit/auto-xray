@@ -149,11 +149,10 @@ fi
 
 /usr/bin/open "$APP_DIR"
 
-# The DMG installer app owns the user-facing dialogs and does not have a Terminal
-# window to close. Keep the existing .command behavior for the ZIP fallback.
+# Successful ZIP installation must stay non-modal too. Errors are still shown by
+# the failure paths above. For a direct .command launch, only close its Terminal tab.
 if [ "${AUTO_XRAY_GUI_INSTALLER:-0}" != "1" ]; then
   CURRENT_TTY="$(/usr/bin/tty 2>/dev/null || true)"
-  /usr/bin/osascript -e 'display dialog "AUTO Xray установлен и запущен." buttons {"OK"} default button "OK" with title "AUTO Xray"' >/dev/null 2>&1 || true
 
   if [[ "$CURRENT_TTY" == /dev/ttys* ]]; then
     (
