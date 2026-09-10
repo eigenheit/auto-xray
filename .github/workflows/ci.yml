@@ -47,15 +47,22 @@ jobs:
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
           grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
-      - name: Compile DMG progress UI
+      - name: Compile native Catalina installer progress UI
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/AUTO_Xray_install_progress.scpt
-          /usr/bin/osacompile -l JavaScript -o /tmp/AUTO_Xray_install_progress.scpt scripts/dmg-install-progress.js
-          test -s /tmp/AUTO_Xray_install_progress.scpt
-          grep -Fq 'dmg-install-progress.js' scripts/dmg-installer-launcher.sh
-          grep -Fq 'PROGRESS_DONE' scripts/dmg-installer-launcher.sh
+          /usr/bin/xcrun clang \
+            -arch x86_64 \
+            -mmacosx-version-min=10.15 \
+            -fobjc-arc \
+            -framework Cocoa \
+            scripts/dmg-install-progress.m \
+            -o /tmp/AUTO_Xray_installer_progress
+          test -x /tmp/AUTO_Xray_installer_progress
+          /usr/bin/file /tmp/AUTO_Xray_installer_progress | grep -Fq 'x86_64'
+          grep -Fq 'installer-progress' scripts/dmg-installer-launcher.sh
+          grep -Fq 'TEST_INSTALLER_UI.command' .github/workflows/release-draft.yml
+          grep -Fq 'Этот тест ничего не устанавливает.' scripts/TEST_INSTALLER_UI.command
 
       - name: Guard responsive menu and quiet ZIP install
         shell: bash
@@ -93,6 +100,7 @@ jobs:
           grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/package-installer.yml
           grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
           grep -Fq 'Diagnostics/RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'Diagnostics/TEST_INSTALLER_UI.command' .github/workflows/release-draft.yml
 
       - name: Validate Xray metadata
         shell: bash

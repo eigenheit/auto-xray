@@ -3,7 +3,7 @@ set -u
 
 BUNDLE_ROOT="$(cd "$(dirname "$0")/.." && /bin/pwd)"
 PAYLOAD="$BUNDLE_ROOT/Resources/payload"
-PROGRESS_SCRIPT="$BUNDLE_ROOT/Resources/dmg-install-progress.js"
+PROGRESS_HELPER="$BUNDLE_ROOT/Resources/installer-progress"
 LOG_DIR="$HOME/Library/Logs/AUTO Xray"
 LOG_FILE="$LOG_DIR/installer.log"
 PROGRESS_DONE="${TMPDIR:-/tmp}/auto-xray-install-progress-${UID:-0}-$$.done"
@@ -19,14 +19,20 @@ APPLESCRIPT
 
 start_progress() {
   /bin/rm -f "$PROGRESS_DONE" >/dev/null 2>&1 || true
-  [ -f "$PROGRESS_SCRIPT" ] || return 0
-  /usr/bin/osascript -l JavaScript "$PROGRESS_SCRIPT" "$PROGRESS_DONE" "$VERSION" >/dev/null 2>&1 &
+  [ -x "$PROGRESS_HELPER" ] || return 0
+  "$PROGRESS_HELPER" "$PROGRESS_DONE" "$VERSION" >>"$LOG_FILE" 2>&1 &
   PROGRESS_PID=$!
+  # Give the native Cocoa window time to become visible before installation
+  # work starts. This also prevents a very fast update from flashing invisibly.
+  /bin/sleep 0.5
 }
 
 stop_progress() {
-  /usr/bin/touch "$PROGRESS_DONE" >/dev/null 2>&1 || true
-  if [ -n "$PROGRESS_PID" ]; then
+  if [ -n "$PROGRESS_PID" ] && /bin/kill -0 "$PROGRESS_PID" >/dev/null 2>&1; then
+    # Keep the indicator visible long enough to be perceptible even on a fast
+    # in-place update, then signal the exact same helper used by the preflight.
+    /bin/sleep 0.7
+    /usr/bin/touch "$PROGRESS_DONE" >/dev/null 2>&1 || true
     local i=0
     while /bin/kill -0 "$PROGRESS_PID" >/dev/null 2>&1 && [ "$i" -lt 20 ]; do
       /bin/sleep 0.1
@@ -51,13 +57,19 @@ fi
 VERSION="$(/bin/cat "$PAYLOAD/VERSION" | /usr/bin/tr -d '[:space:]')"
 
 /bin/mkdir -p "$LOG_DIR"
+: > "$LOG_FILE"
 start_progress
 trap stop_progress EXIT INT TERM HUP
 {
   echo "=== AUTO Xray DMG install $(/bin/date) ==="
+  if [ -n "$PROGRESS_PID" ]; then
+    echo "Progress helper PID: $PROGRESS_PID"
+  else
+    echo "WARNING: native progress helper missing or not executable"
+  fi
   /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_GUI_INSTALLER=1 \
     /bin/bash "$PAYLOAD/scripts/install-catalina.command"
-} >"$LOG_FILE" 2>&1
+} >>"$LOG_FILE" 2>&1
 RC=$?
 stop_progress
 trap - EXIT INT TERM HUP
