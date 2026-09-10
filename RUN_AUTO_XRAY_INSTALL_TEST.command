@@ -16,6 +16,7 @@ ARCHIVE="$OUT_DIR.zip"
 STOP_FILE="${TMPDIR:-/tmp}/auto-xray-install-monitor-${UID:-0}-$$.stop"
 INSTALL_SEEN="${TMPDIR:-/tmp}/auto-xray-install-monitor-${UID:-0}-$$.install"
 FIRST_LAUNCH_SEEN="${TMPDIR:-/tmp}/auto-xray-install-monitor-${UID:-0}-$$.launch"
+READY_OFF_SEEN="${TMPDIR:-/tmp}/auto-xray-install-monitor-${UID:-0}-$$.ready-off"
 START_MS=0
 START_EPOCH=0
 MONITOR_PID=""
@@ -36,7 +37,7 @@ monotonic_ms() {
 elapsed_ms() {
   local now
   now="$(monotonic_ms)"
-  /usr/bin/expr "$now" - "$START_MS"
+  /usr/bin/printf '%s\n' "$((now - START_MS))"
 }
 
 record_event() {
@@ -57,7 +58,7 @@ relevant_processes() {
   /bin/ps -axo pid=,ppid=,command= 2>/dev/null | \
     /usr/bin/grep -E 'Install AUTO Xray\.app|INSTALL_AUTO_XRAY_CATALINA\.command|install-catalina\.command|dmg-installer-launcher\.sh|installer-progress|AUTO Xray\.app/Contents/MacOS|auto-xray-helper\.rb|auto-xray-core-helper\.rb|/Contents/Resources/xray( |$)|osacompile|codesign|lsregister' | \
     /usr/bin/grep -v -E 'grep -E|RUN_AUTO_XRAY_INSTALL_TEST\.command' | \
-    sanitize_line | /usr/bin/sort -n || true
+    sanitize_line | /usr/bin/sort || true
 }
 
 app_version() {
@@ -87,8 +88,32 @@ capture_proxy_state() {
   } | sanitize_line
 }
 
+menu_state_raw() {
+  [ -f "$HELPER" ] || return 127
+  /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$RES" \
+    /usr/bin/ruby -EUTF-8:UTF-8 "$HELPER" menu-state 2>/dev/null
+}
+
+menu_state_is_ready_off() {
+  local state="$1"
+  /usr/bin/printf '%s' "$state" | /usr/bin/ruby -rjson -e '
+    begin
+      j = JSON.parse(STDIN.read)
+      exit((j["on"] == false && j["proxy"] == false) ? 0 : 1)
+    rescue StandardError
+      exit 1
+    end
+  ' >/dev/null 2>&1
+}
+
+listeners_clear() {
+  [ -z "$(/usr/sbin/lsof -nP -tiTCP:2081 -sTCP:LISTEN 2>/dev/null || true)" ] && \
+  [ -z "$(/usr/sbin/lsof -nP -tiTCP:9001 -sTCP:LISTEN 2>/dev/null || true)" ]
+}
+
 monitor_loop() {
-  local prev cur tmp now install_started app_present helper_present xray_present launch_seen base_mtime bundle_changed current_mtime
+  local prev cur tmp now install_started app_present helper_present xray_present
+  local launch_seen ready_off_seen base_mtime bundle_changed current_mtime state
   prev="${TMPDIR:-/tmp}/auto-xray-install-prev-${UID:-0}-$$.txt"
   cur="${TMPDIR:-/tmp}/auto-xray-install-cur-${UID:-0}-$$.txt"
   tmp="${TMPDIR:-/tmp}/auto-xray-install-diff-${UID:-0}-$$.txt"
@@ -104,6 +129,7 @@ monitor_loop() {
   helper_present=0
   xray_present=0
   launch_seen=0
+  ready_off_seen=0
   bundle_changed=0
   [ -d "$APP_DIR" ] && app_present=1
   [ -f "$HELPER" ] && helper_present=1
@@ -165,29 +191,56 @@ monitor_loop() {
         /usr/bin/printf '%s\tXRAY_READY\txray executable present\n' "$(elapsed_ms)" >> "$TIMELINE"
       fi
 
-      # Do not mistake an already-running previous version for the first launch
-      # of the newly installed build. A launch is valid only after the app bundle
-      # has been removed/recreated or otherwise changed by the installer.
       if [ "$launch_seen" -eq 0 ] && [ "$bundle_changed" -eq 1 ] && \
          /usr/bin/grep -q 'AUTO Xray\.app/Contents/MacOS' "$cur" 2>/dev/null; then
         launch_seen=1
         /usr/bin/printf '%s\tFIRST_LAUNCH\tAUTO Xray process detected after bundle change\n' "$(elapsed_ms)" >> "$TIMELINE"
         /usr/bin/touch "$FIRST_LAUNCH_SEEN"
       fi
+
+      # Installation monitoring ends only when the newly installed menu app is
+      # still running and its own state says OFF with system proxy disabled.
+      # This is the programmatic equivalent of the translucent tray icon state.
+      if [ "$launch_seen" -eq 1 ] && [ "$ready_off_seen" -eq 0 ] && \
+         /usr/bin/grep -q 'AUTO Xray\.app/Contents/MacOS' "$cur" 2>/dev/null; then
+        state="$(menu_state_raw || true)"
+        if [ -n "$state" ] && menu_state_is_ready_off "$state" && listeners_clear; then
+          ready_off_seen=1
+          /usr/bin/printf '%s\tAPP_READY_OFF\tmenu app running; proxy OFF; localhost listeners clear\n' "$(elapsed_ms)" >> "$TIMELINE"
+          /usr/bin/touch "$READY_OFF_SEEN"
+        fi
+      fi
     fi
 
-    /bin/sleep 0.20
+    /bin/sleep 0.25
   done
 
   /bin/rm -f "$prev" "$cur" "$tmp" >/dev/null 2>&1 || true
 }
 
-finish() {
+stop_monitor() {
   /usr/bin/touch "$STOP_FILE" >/dev/null 2>&1 || true
   if [ -n "$MONITOR_PID" ]; then
     wait "$MONITOR_PID" >/dev/null 2>&1 || true
+    MONITOR_PID=""
   fi
-  /bin/rm -f "$STOP_FILE" "$INSTALL_SEEN" "$FIRST_LAUNCH_SEEN" >/dev/null 2>&1 || true
+}
+
+finish() {
+  stop_monitor
+  /bin/rm -f "$STOP_FILE" "$INSTALL_SEEN" "$FIRST_LAUNCH_SEEN" "$READY_OFF_SEEN" >/dev/null 2>&1 || true
+}
+
+write_summary() {
+  {
+    /usr/bin/printf 'elapsed_ms\tevent\tdetail\n'
+    /bin/cat "$TIMELINE"
+  } > "$SUMMARY"
+}
+
+make_archive() {
+  write_summary
+  (cd "$HOME/Desktop" && /usr/bin/zip -qry "$ARCHIVE" "$(/usr/bin/basename "$OUT_DIR")") >/dev/null 2>&1 || true
 }
 
 trap finish EXIT
@@ -197,7 +250,7 @@ START_MS="$(monotonic_ms)"
 START_EPOCH="$(/bin/date '+%s')"
 
 {
-  echo "AUTO Xray install + first-launch timing test"
+  echo "AUTO Xray install + first-launch OFF timing test"
   echo "Started: $(/bin/date)"
   echo "Machine: $(/usr/bin/uname -m)"
   echo "macOS: $(/usr/bin/sw_vers -productVersion 2>/dev/null || echo unknown)"
@@ -212,6 +265,8 @@ START_EPOCH="$(/bin/date '+%s')"
 log "AUTO Xray — монитор установки и первого запуска"
 log ""
 log "Тест запущен ДО установки. Он фиксирует только процессы AUTO Xray/установщика, а не все процессы macOS."
+log "Монитор завершает этап установки только когда новая версия запущена, остаётся в OFF и системный прокси AUTO Xray не включён."
+log "Это соответствует полупрозрачной иконке AUTO Xray в строке меню."
 log "Для каждого события используется монотонный таймер в миллисекундах. URL подписки и UUID в process-log редактируются."
 log ""
 log "Теперь запустите установщик AUTO Xray обычным способом и оставьте это окно Terminal открытым."
@@ -222,21 +277,43 @@ record_event "MONITOR_READY" "waiting for installer"
 monitor_loop &
 MONITOR_PID=$!
 
-i=0
-while [ ! -f "$FIRST_LAUNCH_SEEN" ] && [ "$i" -lt 3000 ]; do
-  /bin/sleep 0.20
-  i=$((i + 1))
+total_ticks=0
+off_ticks=0
+while [ ! -f "$READY_OFF_SEEN" ] && [ "$total_ticks" -lt 2400 ]; do
+  /bin/sleep 0.25
+  total_ticks=$((total_ticks + 1))
+  if [ -f "$FIRST_LAUNCH_SEEN" ]; then
+    off_ticks=$((off_ticks + 1))
+    [ "$off_ticks" -lt 240 ] || break
+  fi
 done
 
-if [ ! -f "$FIRST_LAUNCH_SEEN" ]; then
-  record_event "TIMEOUT" "first AUTO Xray launch was not observed within 10 minutes"
-  log ""
-  log "Не удалось дождаться первого запуска за 10 минут. Отчёт всё равно сохранён в $OUT_DIR."
+if [ ! -f "$READY_OFF_SEEN" ]; then
+  if [ -f "$FIRST_LAUNCH_SEEN" ]; then
+    record_event "TIMEOUT" "AUTO Xray launched but did not reach ready OFF/proxy-disabled state within 60 seconds"
+    log ""
+    log "Приложение запустилось, но за 60 секунд не подтвердило состояние OFF с выключенным прокси."
+  else
+    record_event "TIMEOUT" "first AUTO Xray launch was not observed within 10 minutes"
+    log ""
+    log "Не удалось дождаться первого запуска за 10 минут."
+  fi
+  stop_monitor
+  {
+    echo "Observed version: $(app_version)"
+    echo "App exists: $([ -d "$APP_DIR" ] && echo yes || echo no)"
+    echo "Current menu-state:"
+    menu_state_raw || true
+    echo
+    capture_proxy_state "Proxy state at timeout"
+  } > "$FIRST_STATE"
+  make_archive
+  log "Диагностический архив сохранён: $ARCHIVE"
   exit 2
 fi
 
-record_event "FIRST_LAUNCH_OBSERVED" "checking first menu-state response"
-/bin/sleep 0.5
+record_event "READY_OFF_CONFIRMED" "new app is running in OFF state; runtime tests not started yet"
+stop_monitor
 
 MENU_TMP="$OUT_DIR/menu-state-first.txt"
 MENU_META="$OUT_DIR/menu-state-first-timing.txt"
@@ -252,35 +329,29 @@ fi
 end="$(monotonic_ms)"
 MENU_MS=$((end - start))
 /usr/bin/printf 'menu-state-ms\t%s\nrc\t%s\n' "$MENU_MS" "$MENU_RC" > "$MENU_META"
-record_event "MENU_STATE" "first response ${MENU_MS} ms rc=${MENU_RC}"
+record_event "MENU_STATE" "ready-OFF response ${MENU_MS} ms rc=${MENU_RC}"
 
 {
   echo "Observed version: $(app_version)"
   echo "App exists: $([ -d "$APP_DIR" ] && echo yes || echo no)"
   echo "Helper exists: $([ -f "$HELPER" ] && echo yes || echo no)"
   echo "Xray executable: $([ -x "$RES/xray" ] && echo yes || echo no)"
-  echo "First menu-state: ${MENU_MS} ms rc=${MENU_RC}"
+  echo "Ready-OFF menu-state: ${MENU_MS} ms rc=${MENU_RC}"
+  echo "Menu-state payload:"
+  /bin/cat "$MENU_TMP" 2>/dev/null || true
   echo
-  capture_proxy_state "Proxy state after first launch"
+  capture_proxy_state "Proxy state after first launch, before runtime tests"
   echo
-  echo "Listeners after first launch:"
+  echo "Listeners before runtime tests:"
   /usr/sbin/lsof -nP -iTCP:2081 -sTCP:LISTEN 2>/dev/null | sanitize_line || true
   /usr/sbin/lsof -nP -iTCP:9001 -sTCP:LISTEN 2>/dev/null | sanitize_line || true
 } > "$FIRST_STATE"
 
-/usr/bin/touch "$STOP_FILE" >/dev/null 2>&1 || true
-wait "$MONITOR_PID" >/dev/null 2>&1 || true
-MONITOR_PID=""
-
-{
-  echo -e "elapsed_ms\tevent\tdetail"
-  /bin/cat "$TIMELINE"
-} > "$SUMMARY"
-
 log ""
-log "Установка и первый запуск зафиксированы."
+log "Установка завершена и первый запуск подтверждён."
 log "Версия приложения: $(app_version)"
-log "Первый menu-state: ${MENU_MS} ms (rc=${MENU_RC})"
+log "AUTO Xray сейчас OFF; прокси не включён; приложение уже работает в строке меню."
+log "Первый menu-state в готовом OFF-состоянии: ${MENU_MS} ms (rc=${MENU_RC})"
 log ""
 printf 'Начать автоматические тесты работы AUTO Xray с замером отклика? [Y/n]: '
 IFS= read -r ANSWER
@@ -303,7 +374,7 @@ if [ "$RUN_RUNTIME" -eq 1 ]; then
   done
 
   if [ -n "$RUNNER" ]; then
-    record_event "RUNTIME_TEST_START" "starting RUN_AUTO_XRAY_TESTS.command"
+    record_event "RUNTIME_TEST_START" "starting RUN_AUTO_XRAY_TESTS.command from confirmed OFF state"
     /bin/bash "$RUNNER"
     RUNTIME_RC=$?
     record_event "RUNTIME_TEST_END" "runtime self-test rc=${RUNTIME_RC}"
@@ -325,18 +396,13 @@ else
 fi
 
 record_event "SESSION_END" "creating combined archive"
-{
-  echo -e "elapsed_ms\tevent\tdetail"
-  /bin/cat "$TIMELINE"
-} > "$SUMMARY"
+make_archive
 
 log ""
 log "Итоговые файлы:"
 log "  $TIMELINE"
 log "  $PROCESSES"
 log "  $FIRST_STATE"
-
-(cd "$HOME/Desktop" && /usr/bin/zip -qry "$ARCHIVE" "$(/usr/bin/basename "$OUT_DIR")") >/dev/null 2>&1 || true
 log ""
 log "Готово. Общий архив для отправки ChatGPT:"
 log "$ARCHIVE"
