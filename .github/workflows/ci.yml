@@ -128,15 +128,13 @@ jobs:
             echo 'Installer UI preflight must not be copied into the public DMG.' >&2
             exit 1
           fi
-          if grep -Eq 'mkdir[^\n]*Diagnostics|ROOT/Diagnostics|PAYLOAD/Diagnostics' .github/workflows/release-draft.yml; then
-            echo 'Public DMG workflow must not create or depend on a Diagnostics directory.' >&2
-            exit 1
-          fi
 
           grep -Fq 'Diagnostic helper leaked into public ZIP' .github/workflows/package-installer.yml
           grep -Fq 'Diagnostic helper leaked into public ZIP.' .github/workflows/release-draft.yml
           grep -Fq 'Diagnostic helper leaked into public DMG root.' .github/workflows/release-draft.yml
           grep -Fq 'Diagnostic helper found inside final DMG.' .github/workflows/release-draft.yml
+          grep -Fq 'test ! -d "$PAYLOAD/Diagnostics"' .github/workflows/release-draft.yml
+          grep -Fq 'test ! -d "$ROOT/Diagnostics"' .github/workflows/release-draft.yml
           grep -Fq 'test ! -d "$MOUNT/Diagnostics"' .github/workflows/release-draft.yml
 
           grep -Fq 'Process.clock_gettime(Process::CLOCK_MONOTONIC)' RUN_AUTO_XRAY_INSTALL_TEST.command
