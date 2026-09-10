@@ -85,6 +85,7 @@ jobs:
           mkdir -p "$PKG/src" "$PKG/assets" "$PKG/vendor/xray" "$PKG/scripts" "$PKG/docs"
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
+          cp RUN_AUTO_XRAY_TESTS.command "$PKG/RUN_AUTO_XRAY_TESTS.command"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
@@ -118,6 +119,10 @@ jobs:
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
 
+          Для диагностики после установки можно запустить
+          RUN_AUTO_XRAY_TESTS.command. В ZIP сохранено право на выполнение,
+          поэтому отдельный chmod обычно не требуется.
+
           Telegram: Use system proxy settings.
 
           Не отключайте Gatekeeper глобально.
@@ -125,6 +130,7 @@ jobs:
           EOF
 
           chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
+                   "$PKG/RUN_AUTO_XRAY_TESTS.command" \
                    "$PKG/scripts/install-catalina.command" \
                    "$PKG/UNINSTALL_AUTO_XRAY.command" \
                    "$PKG/vendor/xray/xray"
@@ -145,11 +151,12 @@ jobs:
 
           ## Что изменилось
 
-          - menu-bar интерфейс больше не блокируется watchdog-проверками сети: проверка выполняется асинхронно раз в 15 секунд;
-          - убраны лишние модальные окна при успешной установке, включении/выключении и обновлении подписки;
-          - ошибки по-прежнему показываются явно;
-          - DMG остается основным способом установки, ZIP — резервным;
-          - рабочая сетевая логика сохранена без изменений относительно проверенной 2.5.6.
+          - AUTO-переключение RF/EU/World теперь проходит через supervisor recovery; если один узел группы недоступен, observatory проверяет кандидатов параллельно и может выбрать рабочий узел;
+          - сохранена защита от одновременных watchdog/user runtime-действий и коллизий портов 2081/9001;
+          - DMG показывает небольшое окно с индикатором во время установки и закрывает его автоматически по завершении;
+          - диагностический RUN_AUTO_XRAY_TESTS.command поставляется с корректным executable bit в DMG/ZIP, поэтому скачивать raw-файл и делать chmod вручную не требуется;
+          - успешная установка и обычные ON/OFF действия остаются без лишних модальных окон; ошибки показываются явно;
+          - DMG остается основным способом установки, ZIP — резервным.
 
           ## Установка через DMG
 
@@ -157,7 +164,7 @@ jobs:
           2. Откройте DMG.
           3. Запустите **Install AUTO Xray.app**.
           4. Если Catalina показывает предупреждение о непроверенном разработчике: **Control + клик → Open / Открыть**. Иногда после первой блокировки Catalina разрешает запуск при повторном Control + клик → Open.
-          5. Установка начинается автоматически; дополнительных подтверждений AUTO Xray не требует.
+          5. Во время установки отображается индикатор. Он закрывается автоматически после завершения.
           6. После установки нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
 
           После установки AUTO Xray стартует в состоянии **OFF**: обычный интернет должен работать напрямую.
@@ -166,7 +173,7 @@ jobs:
 
           Xray-core 1.8.4 находится внутри установочного пакета. На пользовательском Mac он отдельно не скачивается.
 
-          **Статус:** pre-release до проверки 2.5.7 на реальном Intel Mac с Catalina.
+          **Статус:** pre-release до проверки текущей версии на реальном Intel Mac с Catalina.
           EOF
 
       - name: Create or update GitHub pre-release
@@ -226,6 +233,7 @@ jobs:
           test -f "$PAYLOAD/VERSION"
           test -f "$PAYLOAD/assets/Dove.icns"
           test -x "$PAYLOAD/vendor/xray/xray"
+          test -x "$PAYLOAD/RUN_AUTO_XRAY_TESTS.command"
 
           EXPECTED="$(head -n 1 "$PAYLOAD/vendor/xray/XRAY_SHA256.txt" | cut -c 1-64)"
           ACTUAL="$(shasum -a 256 "$PAYLOAD/vendor/xray/xray" | cut -c 1-64)"
@@ -241,11 +249,28 @@ jobs:
           APP="$ROOT/Install AUTO Xray.app"
 
           rm -rf "$ROOT"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/Diagnostics"
           cp scripts/dmg-installer-launcher.sh "$APP/Contents/MacOS/installer"
           chmod +x "$APP/Contents/MacOS/installer"
+          cp scripts/dmg-install-progress.js "$APP/Contents/Resources/dmg-install-progress.js"
           cp "$PAYLOAD/assets/Dove.icns" "$APP/Contents/Resources/Dove.icns"
           /usr/bin/ditto "$PAYLOAD" "$APP/Contents/Resources/payload"
+
+          cp "$PAYLOAD/RUN_AUTO_XRAY_TESTS.command" "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          chmod +x "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          cat > "$ROOT/Diagnostics/README.txt" <<EOF
+          Диагностика AUTO Xray ${VERSION}
+          ================================
+
+          После установки и обновления подписки запустите
+          RUN_AUTO_XRAY_TESTS.command, если нужно проверить текущую версию.
+
+          Файл уже имеет право на выполнение. Если Catalina блокирует первый
+          запуск, используйте Control + клик → Open / Открыть. Gatekeeper
+          глобально отключать не нужно.
+          EOF
+
+          /usr/bin/osacompile -l JavaScript -o /tmp/AUTO_Xray_install_progress.scpt scripts/dmg-install-progress.js
 
           cat > "$APP/Contents/Info.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -281,11 +306,13 @@ jobs:
 
           1. Откройте Install AUTO Xray.app.
           2. Если Catalina блокирует запуск: Control + клик → Open / Открыть.
-          3. Установка начинается автоматически.
+          3. Во время установки появится индикатор; он закроется автоматически.
           4. После установки голубь появится в строке меню и в Launchpad.
 
           AUTO Xray запускается в состоянии OFF, поэтому обычный интернет
           должен продолжить работать напрямую до нажатия «Включить».
+
+          Для диагностического теста после установки используйте папку Diagnostics.
 
           Этот релиз не подписан Apple Developer ID и не notarized.
           Не отключайте Gatekeeper глобально.
