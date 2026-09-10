@@ -21,6 +21,7 @@ ORIG_TYPE="auto"
 ORIG_VALUE="RF"
 AUTO_WORLD_OK=0
 WORLD_MANUAL_OK=0
+WORKING_AUTO_GROUP=""
 TIMED_MS=0
 TIMED_OUTPUT=""
 
@@ -90,6 +91,17 @@ check_fast_start() {
   fi
 }
 
+check_manual_switch_budget() {
+  local label="$1" ms="$2"
+  if [ "$ms" -gt 20000 ]; then
+    mark_fail "$label: переключение заняло ${ms} ms; лимит неуспешного/ручного переключения 20 с превышен."
+  elif [ "$ms" -gt 12000 ]; then
+    mark_warn "$label: переключение заняло ${ms} ms; целевой бюджет ≤ 12000 ms."
+  else
+    log "Manual timing: $label = ${ms} ms."
+  fi
+}
+
 record_menu_refresh_timing() {
   local label="$1"
   if run_timed_helper "${label}-menu-state" menu-state; then
@@ -149,7 +161,7 @@ runtime_line_count() {
 }
 
 capture_runtime_delta() {
-  local end start
+  local start
   start=$((RUNTIME_START + 1))
   if [ -f "$RUNTIME_LOG" ]; then
     /usr/bin/sed -n "${start},\$p" "$RUNTIME_LOG" 2>/dev/null | \
@@ -315,6 +327,8 @@ try_auto_group() {
   http="$(probe_http)"
   if probe_ok "$socks"; then
     mark_pass "AUTO $group: SOCKS probe OK ($socks)."
+    [ -n "$WORKING_AUTO_GROUP" ] || WORKING_AUTO_GROUP="$group"
+    [ "$group" = "RF" ] && WORKING_AUTO_GROUP="RF"
     [ "$group" = "WORLD" ] && AUTO_WORLD_OK=1
   else
     mark_warn "AUTO $group: SOCKS probe failed ($socks)."
@@ -351,6 +365,42 @@ try_auto_group RF || true
 try_auto_group EU || true
 try_auto_group WORLD || true
 
+prepare_manual_baseline() {
+  local node_id="$1" group state socks
+  group="$WORKING_AUTO_GROUP"
+  if [ -z "$group" ]; then
+    if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null; then
+      group="RF"
+    elif /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
+      group="EU"
+    else
+      group="WORLD"
+    fi
+  fi
+
+  run_helper stop >> "$REPORT" 2>&1 || true
+  if ! run_helper mode auto "$group" >> "$REPORT" 2>&1; then
+    mark_warn "Manual baseline $node_id: не удалось выбрать AUTO $group."
+    return 1
+  fi
+  if ! run_timed_helper "manual-baseline-$node_id" start; then
+    /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+    mark_warn "Manual baseline $node_id: AUTO $group не запустился за ${TIMED_MS} ms."
+    return 1
+  fi
+  state="$(menu_state)"
+  if ! /usr/bin/printf '%s' "$state" | /usr/bin/grep -q '"on":true'; then
+    mark_warn "Manual baseline $node_id: AUTO $group не подтверждает ON."
+    return 1
+  fi
+  socks="$(probe_socks)"
+  if ! probe_ok "$socks"; then
+    mark_warn "Manual baseline $node_id: AUTO $group не прошёл SOCKS probe ($socks)."
+    return 1
+  fi
+  return 0
+}
+
 log ""
 log "=== 3. Manual WORLD nodes ==="
 WORLD_IDS="$(/usr/bin/awk -F'\t' '$1 == "WORLD" {print $2}' "$NODES_OUT" 2>/dev/null)"
@@ -360,24 +410,37 @@ else
   for node_id in $WORLD_IDS; do
     node_name="$(/usr/bin/awk -F'\t' -v id="$node_id" '$2 == id {print $3; exit}' "$NODES_OUT")"
     log "-- manual $node_id $node_name"
+
+    if ! prepare_manual_baseline "$node_id"; then
+      mark_warn "Manual $node_name: тест узла пропущен, потому что не удалось восстановить известный рабочий AUTO baseline."
+      continue
+    fi
+
     if run_timed_helper "mode-manual-$node_id" mode manual "$node_id"; then
       OUT="$TIMED_OUTPUT"
-      if [ "$TIMED_MS" -gt 12000 ]; then
-        mark_warn "Manual $node_name: переключение заняло ${TIMED_MS} ms."
+      check_manual_switch_budget "Manual $node_name" "$TIMED_MS"
+      STATE="$(menu_state)"
+      if ! /usr/bin/printf '%s' "$STATE" | /usr/bin/grep -q '"on":true'; then
+        mark_warn "Manual $node_name: команда вернула успех, но состояние не ON; probe не выполняю."
+        continue
+      fi
+      SOCKS_OUT="$(probe_socks)"
+      if probe_ok "$SOCKS_OUT"; then
+        WORLD_MANUAL_OK=$((WORLD_MANUAL_OK + 1))
+        mark_pass "Manual $node_name: SOCKS probe OK ($SOCKS_OUT)."
       else
-        mark_pass "Manual $node_name: переключение за ${TIMED_MS} ms."
+        mark_warn "Manual $node_name: SOCKS probe failed ($SOCKS_OUT)."
       fi
     else
       OUT="$TIMED_OUTPUT"
+      check_manual_switch_budget "Manual $node_name failure" "$TIMED_MS"
       mark_warn "Manual $node_name не переключился за ${TIMED_MS} ms: $OUT"
-      continue
-    fi
-    SOCKS_OUT="$(probe_socks)"
-    if probe_ok "$SOCKS_OUT"; then
-      WORLD_MANUAL_OK=$((WORLD_MANUAL_OK + 1))
-      mark_pass "Manual $node_name: SOCKS probe OK ($SOCKS_OUT)."
-    else
-      mark_warn "Manual $node_name: SOCKS probe failed ($SOCKS_OUT)."
+      STATE="$(menu_state)"
+      if /usr/bin/printf '%s' "$STATE" | /usr/bin/grep -q '"on":true'; then
+        log "Manual $node_name: после ошибки rollback оставил приложение ON."
+      else
+        mark_warn "Manual $node_name: после ошибки rollback не оставил приложение ON; следующий узел начнётся с нового baseline."
+      fi
     fi
   done
 fi
@@ -422,6 +485,11 @@ fi
 
 log ""
 log "=== 5. Repeated ON/OFF ==="
+if [ -n "$WORKING_AUTO_GROUP" ]; then
+  run_helper stop >> "$REPORT" 2>&1 || true
+  run_helper mode auto "$WORKING_AUTO_GROUP" >> "$REPORT" 2>&1 || true
+fi
+
 i=1
 while [ "$i" -le 3 ]; do
   if run_timed_helper "cycle-$i-stop" stop; then

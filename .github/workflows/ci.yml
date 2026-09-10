@@ -98,7 +98,7 @@ jobs:
           grep -Fq 'cleanup_orphan_runtime' src/auto-xray-supervisor.rb
           grep -Fq 'BUSY\n' src/auto-xray-supervisor.rb
 
-      - name: Guard resilient AUTO group switching
+      - name: Guard resilient AUTO and fail-fast manual switching
         shell: bash
         run: |
           set -euo pipefail
@@ -106,6 +106,9 @@ jobs:
           grep -Fq 'def resilient_mode(args)' src/auto-xray-supervisor.rb
           grep -Fq "with_runtime_lock { resilient_mode(args) }" src/auto-xray-supervisor.rb
           grep -Fq 'foreground mode rollback succeeded' src/auto-xray-supervisor.rb
+          grep -Fq 'def resilient_start(allow_fallback: nil)' src/auto-xray-supervisor.rb
+          grep -Fq 'manual start failed; same-node recovery skipped' src/auto-xray-supervisor.rb
+          grep -Fq 'resilient_start(allow_fallback: !target_manual)' src/auto-xray-supervisor.rb
 
       - name: Guard executable diagnostic packaging
         shell: bash
@@ -121,7 +124,17 @@ jobs:
           grep -Fq 'Process.clock_gettime(Process::CLOCK_MONOTONIC)' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'bundle_changed' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'FIRST_LAUNCH' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'APP_READY_OFF' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'READY_OFF_CONFIRMED' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'listeners_clear' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'RUNTIME_TEST_START' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'prepare_manual_baseline' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'WORKING_AUTO_GROUP' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'check_manual_switch_budget' RUN_AUTO_XRAY_TESTS.command
+          if grep -Fq '/usr/bin/expr "$now" - "$START_MS"' RUN_AUTO_XRAY_INSTALL_TEST.command; then
+            echo 'Install timing monitor must use shell arithmetic, not the missing Catalina /usr/bin/expr path.' >&2
+            exit 1
+          fi
 
       - name: Validate Xray metadata
         shell: bash
