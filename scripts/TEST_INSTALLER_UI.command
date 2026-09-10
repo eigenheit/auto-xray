@@ -2,25 +2,52 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && /bin/pwd)"
-ROOT="$(cd "$SCRIPT_DIR/.." && /bin/pwd)"
-HELPER="$ROOT/Install AUTO Xray.app/Contents/Resources/installer-progress"
 STAMP="$(/bin/date '+%Y%m%d-%H%M%S')"
 REPORT="$HOME/Desktop/AUTO_Xray_Installer_UI_Test_$STAMP.txt"
 DONE="${TMPDIR:-/tmp}/auto-xray-ui-test-${UID:-0}-$$.done"
+
+find_helper() {
+  local candidate
+
+  for candidate in \
+    "$SCRIPT_DIR/installer-progress" \
+    "$SCRIPT_DIR/../Install AUTO Xray.app/Contents/Resources/installer-progress" \
+    /Volumes/AUTO\ Xray\ */Install\ AUTO\ Xray.app/Contents/Resources/installer-progress
+  do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+HELPER="$(find_helper || true)"
 
 {
   echo "AUTO Xray installer UI preflight"
   echo "Started: $(/bin/date)"
   echo "Machine: $(/usr/bin/uname -m)"
   echo "macOS: $(/usr/bin/sw_vers -productVersion 2>/dev/null || echo unknown)"
-  echo "Helper: $HELPER"
+  echo "Test script: $0"
+  echo "Resolved helper: ${HELPER:-not found}"
 } > "$REPORT"
 
-if [ ! -x "$HELPER" ]; then
+if [ -z "$HELPER" ] || [ ! -x "$HELPER" ]; then
   echo "RESULT: FAIL - progress helper missing or not executable" >> "$REPORT"
-  /usr/bin/osascript -e 'display dialog "Не найден исполняемый индикатор установки. Ничего не устанавливалось." buttons {"OK"} default button "OK" with icon stop with title "AUTO Xray"' >/dev/null 2>&1 || true
+  printf '\nAUTO Xray — тест индикатора\n\n'
+  printf 'Не найден исполняемый индикатор установки.\n'
+  printf 'Ничего не устанавливалось и системные настройки не менялись.\n\n'
+  printf 'Оставьте DMG AUTO Xray смонтированным и запустите этот файл снова.\n'
+  printf 'Его можно запускать как из папки Diagnostics внутри DMG, так и после копирования на Desktop.\n\n'
+  printf 'Отчёт: %s\n' "$REPORT"
   exit 1
 fi
+
+printf '\nAUTO Xray — тест индикатора\n\n'
+printf 'Сейчас примерно на 6 секунд должно появиться окно «Установка AUTO Xray…»\n'
+printf 'с полосой активности. Этот тест ничего не устанавливает.\n\n'
 
 /bin/rm -f "$DONE" >/dev/null 2>&1 || true
 "$HELPER" "$DONE" "UI test" >/dev/null 2>&1 &
@@ -33,13 +60,25 @@ RC=$?
 
 echo "Helper exit code: $RC" >> "$REPORT"
 
-CHOICE="$(/usr/bin/osascript -e 'button returned of (display dialog "Перед этим примерно 6 секунд должно было быть видно окно «Установка AUTO Xray…» с полосой активности. Вы его видели?\n\nЭтот тест ничего не устанавливает." buttons {"Нет", "Да"} default button "Да" with title "AUTO Xray — тест индикатора")' 2>/dev/null || echo "Нет")"
+printf 'Вы видели окно индикатора? [y/N]: '
+IFS= read -r ANSWER
+case "$ANSWER" in
+  y|Y|yes|YES|Yes|д|Д|да|Да|ДА)
+    SAW="Да"
+    ;;
+  *)
+    SAW="Нет"
+    ;;
+esac
 
-echo "User saw indicator: $CHOICE" >> "$REPORT"
-if [ "$RC" -eq 0 ] && [ "$CHOICE" = "Да" ]; then
+echo "User saw indicator: $SAW" >> "$REPORT"
+if [ "$RC" -eq 0 ] && [ "$SAW" = "Да" ]; then
   echo "RESULT: PASS" >> "$REPORT"
+  printf '\nPASS: индикатор подтверждён пользователем.\n'
 else
   echo "RESULT: FAIL" >> "$REPORT"
+  printf '\nFAIL: индикатор не подтверждён.\n'
 fi
 
-/usr/bin/osascript -e "display dialog \"Тест завершён. Отчёт сохранён на Desktop:\n$(/usr/bin/basename "$REPORT")\" buttons {\"OK\"} default button \"OK\" with title \"AUTO Xray\"" >/dev/null 2>&1 || true
+printf 'Отчёт сохранён на Desktop:\n%s\n' "$REPORT"
+printf '\nМожно закрыть Terminal.\n'
