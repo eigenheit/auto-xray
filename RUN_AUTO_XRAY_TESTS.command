@@ -254,7 +254,6 @@ if [ $? -ne 0 ] || [ -z "$STATE" ]; then
 fi
 
 HAS_URL="$(/usr/bin/printf '%s' "$STATE" | json_field 'j["hasURL"]')"
-NODE_COUNT="$(/usr/bin/printf '%s' "$STATE" | json_field 'j["nodes"]')"
 ORIG_TYPE="$(/usr/bin/printf '%s' "$STATE" | json_field 'j.dig("mode","type")')"
 if [ "$ORIG_TYPE" = "manual" ]; then
   ORIG_VALUE="$(/usr/bin/printf '%s' "$STATE" | json_field 'j.dig("mode","node")')"
@@ -265,18 +264,37 @@ else
 fi
 
 if [ "$HAS_URL" != "true" ]; then
-  mark_fail "Подписка не настроена. Сначала обновите подписку в меню AUTO Xray."
+  mark_fail "Подписка не настроена: авто-тест не может начать с обязательного обновления подписки."
   exit 1
 fi
+
+log ""
+log "=== 1. Refresh subscription ==="
+log "Перед проверкой узлов принудительно обновляю сохранённую подписку."
+if run_timed_helper "subscription-update" update; then
+  /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+  mark_pass "Подписка обновлена перед остальными авто-тестами за ${TIMED_MS} ms."
+else
+  /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+  mark_fail "Обновление подписки завершилось ошибкой за ${TIMED_MS} ms; тесты на устаревшем списке узлов не запускаются."
+  exit 1
+fi
+
+STATE="$(menu_state)"
+if [ $? -ne 0 ] || [ -z "$STATE" ]; then
+  mark_fail "После обновления подписки menu-state не отвечает."
+  exit 1
+fi
+NODE_COUNT="$(/usr/bin/printf '%s' "$STATE" | json_field 'j["nodes"]')"
 if ! [ "$NODE_COUNT" -gt 0 ] 2>/dev/null; then
-  mark_fail "Нет узлов для теста. Сначала обновите подписку."
+  mark_fail "После обновления подписки нет узлов для теста."
   exit 1
 fi
-mark_pass "Подписка и список узлов доступны ($NODE_COUNT узлов)."
+mark_pass "Свежий список узлов доступен ($NODE_COUNT узлов)."
 
 run_helper menu-nodes > "$NODES_OUT" 2>&1 || true
 log ""
-log "=== 1. Baseline OFF ==="
+log "=== 2. Baseline OFF ==="
 if run_timed_helper "baseline-stop" stop; then
   /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
   mark_pass "AUTO Xray остановлен перед тестом."
@@ -341,7 +359,7 @@ try_auto_group() {
 }
 
 log ""
-log "=== 2. Start on RF ==="
+log "=== 3. Start on RF ==="
 if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null; then
   run_helper mode auto RF >> "$REPORT" 2>&1 || true
 elif /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
@@ -402,7 +420,7 @@ prepare_manual_baseline() {
 }
 
 log ""
-log "=== 3. Manual WORLD nodes ==="
+log "=== 4. Manual WORLD nodes ==="
 WORLD_IDS="$(/usr/bin/awk -F'\t' '$1 == "WORLD" {print $2}' "$NODES_OUT" 2>/dev/null)"
 if [ -z "$WORLD_IDS" ]; then
   mark_warn "Ручные WORLD-узлы отсутствуют."
@@ -452,7 +470,7 @@ elif [ "$WORLD_MANUAL_OK" -gt 0 ] && [ "$AUTO_WORLD_OK" -eq 1 ]; then
 fi
 
 log ""
-log "=== 4. Watchdog / mode-switch concurrency ==="
+log "=== 5. Watchdog / mode-switch concurrency ==="
 if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null && /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
   run_helper mode auto RF >> "$REPORT" 2>&1 || true
   (
@@ -484,7 +502,7 @@ else
 fi
 
 log ""
-log "=== 5. Repeated ON/OFF ==="
+log "=== 6. Repeated ON/OFF ==="
 if [ -n "$WORKING_AUTO_GROUP" ]; then
   run_helper stop >> "$REPORT" 2>&1 || true
   run_helper mode auto "$WORKING_AUTO_GROUP" >> "$REPORT" 2>&1 || true
