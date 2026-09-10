@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/*.command scripts/*.sh; do
+          for f in scripts/*.command scripts/*.sh RUN_AUTO_XRAY_TESTS.command; do
             [ -e "$f" ] || continue
             echo "Checking $f"
             /bin/bash -n "$f"
