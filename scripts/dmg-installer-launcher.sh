@@ -3,7 +3,6 @@ set -u
 
 BUNDLE_ROOT="$(cd "$(dirname "$0")/.." && /bin/pwd)"
 PAYLOAD="$BUNDLE_ROOT/Resources/payload"
-PROGRESS_HELPER="$BUNDLE_ROOT/Resources/installer-progress"
 LOG_DIR="$HOME/Library/Logs/AUTO Xray"
 LOG_FILE="$LOG_DIR/installer.log"
 PROGRESS_DONE="${TMPDIR:-/tmp}/auto-xray-install-progress-${UID:-0}-$$.done"
@@ -17,20 +16,89 @@ end run
 APPLESCRIPT
 }
 
+run_progress_ui() {
+  /usr/bin/python - "$1" "$2" <<'PY'
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+import sys
+
+try:
+    from AppKit import *
+    from Foundation import *
+except Exception as exc:
+    sys.stderr.write("PyObjC import failed: %s\n" % exc)
+    sys.exit(2)
+
+done_path = sys.argv[1] if len(sys.argv) > 1 else ""
+version = sys.argv[2] if len(sys.argv) > 2 else ""
+
+
+def make_label(frame, text, size, bold=False):
+    label = NSTextField.alloc().initWithFrame_(frame)
+    label.setStringValue_(text)
+    label.setBezeled_(False)
+    label.setDrawsBackground_(False)
+    label.setEditable_(False)
+    label.setSelectable_(False)
+    label.setAlignment_(NSCenterTextAlignment)
+    if bold:
+        label.setFont_(NSFont.boldSystemFontOfSize_(size))
+    else:
+        label.setFont_(NSFont.systemFontOfSize_(size))
+    return label
+
+
+app = NSApplication.sharedApplication()
+app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+app.finishLaunching()
+
+frame = NSMakeRect(0, 0, 380, 132)
+window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+    frame, NSTitledWindowMask, NSBackingStoreBuffered, False
+)
+window.setReleasedWhenClosed_(False)
+window.setLevel_(NSFloatingWindowLevel)
+window.setTitle_("AUTO Xray %s" % version if version else "AUTO Xray")
+
+content = window.contentView()
+content.addSubview_(make_label(NSMakeRect(30, 82, 320, 24), "Установка AUTO Xray…", 14, True))
+content.addSubview_(make_label(NSMakeRect(30, 57, 320, 20), "Пожалуйста, подождите. Окно закроется автоматически.", 11, False))
+
+progress = NSProgressIndicator.alloc().initWithFrame_(NSMakeRect(45, 27, 290, 16))
+progress.setIndeterminate_(True)
+progress.setStyle_(NSProgressIndicatorBarStyle)
+progress.startAnimation_(None)
+content.addSubview_(progress)
+
+window.center()
+window.makeKeyAndOrderFront_(None)
+window.orderFrontRegardless()
+app.activateIgnoringOtherApps_(True)
+
+fm = NSFileManager.defaultManager()
+while done_path and not fm.fileExistsAtPath_(done_path):
+    NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.2))
+
+window.orderOut_(None)
+sys.exit(0)
+PY
+}
+
 start_progress() {
   /bin/rm -f "$PROGRESS_DONE" >/dev/null 2>&1 || true
-  [ -x "$PROGRESS_HELPER" ] || return 0
-  "$PROGRESS_HELPER" "$PROGRESS_DONE" "$VERSION" >>"$LOG_FILE" 2>&1 &
+  if [ ! -x /usr/bin/python ]; then
+    echo "WARNING: /usr/bin/python unavailable; progress UI disabled" >>"$LOG_FILE"
+    return 0
+  fi
+  run_progress_ui "$PROGRESS_DONE" "$VERSION" >>"$LOG_FILE" 2>&1 &
   PROGRESS_PID=$!
-  # Give the native Cocoa window time to become visible before installation
-  # work starts. This also prevents a very fast update from flashing invisibly.
+  # Give the system Cocoa window time to become visible before installation work starts.
   /bin/sleep 0.5
 }
 
 stop_progress() {
   if [ -n "$PROGRESS_PID" ] && /bin/kill -0 "$PROGRESS_PID" >/dev/null 2>&1; then
-    # Keep the indicator visible long enough to be perceptible even on a fast
-    # in-place update, then signal the exact same helper used by the preflight.
+    # Keep the indicator visible long enough to be perceptible on a fast update.
     /bin/sleep 0.7
     /usr/bin/touch "$PROGRESS_DONE" >/dev/null 2>&1 || true
     local i=0
@@ -62,10 +130,11 @@ start_progress
 trap stop_progress EXIT INT TERM HUP
 {
   echo "=== AUTO Xray DMG install $(/bin/date) ==="
+  echo "Progress UI: /usr/bin/python + system PyObjC/Cocoa"
   if [ -n "$PROGRESS_PID" ]; then
-    echo "Progress helper PID: $PROGRESS_PID"
+    echo "Progress UI PID: $PROGRESS_PID"
   else
-    echo "WARNING: native progress helper missing or not executable"
+    echo "WARNING: progress UI did not start"
   fi
   /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_GUI_INSTALLER=1 \
     /bin/bash "$PAYLOAD/scripts/install-catalina.command"
