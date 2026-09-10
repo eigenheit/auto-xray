@@ -19,6 +19,7 @@ int main(int argc, const char *argv[]) {
 
     NSApplication *app = [NSApplication sharedApplication];
     [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    [app finishLaunching];
 
     NSRect frame = NSMakeRect(0, 0, 380, 132);
     NSWindow *window = [[NSWindow alloc]
@@ -27,6 +28,7 @@ int main(int argc, const char *argv[]) {
       backing:NSBackingStoreBuffered
       defer:NO];
     [window setReleasedWhenClosed:NO];
+    [window setLevel:NSFloatingWindowLevel];
     [window setTitle:version.length > 0 ? [NSString stringWithFormat:@"AUTO Xray %@", version] : @"AUTO Xray"];
 
     NSTextField *title = makeLabel(NSMakeRect(30, 82, 320, 24), @"Установка AUTO Xray…", 14, YES);
@@ -43,6 +45,7 @@ int main(int argc, const char *argv[]) {
 
     [window center];
     [window makeKeyAndOrderFront:nil];
+    [window orderFrontRegardless];
     [app activateIgnoringOtherApps:YES];
 
     NSFileManager *fm = [NSFileManager defaultManager];
