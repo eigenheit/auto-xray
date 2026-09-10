@@ -708,6 +708,7 @@ def start_core(mode)
       sleep 0.1
     end
     Process.kill('KILL', pid) rescue nil if process_alive?(pid)
+    Process.wait(pid) rescue nil
     log.close
     raise "Proxy probe failed: #{out.strip}"
   end
