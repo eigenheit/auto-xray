@@ -14,6 +14,18 @@ NOTICE="THIRD_PARTY_NOTICES.txt"
 
 fail() { echo; echo "ERROR: $1"; echo; exit 1; }
 
+progress_update() {
+  local value="$1"
+  local message="$2"
+  local file="${AUTO_XRAY_PROGRESS_FILE:-}"
+  [ -n "$file" ] || return 0
+
+  local tmp="${file}.tmp.$$"
+  /usr/bin/printf '%s\t%s\n' "$value" "$message" > "$tmp" 2>/dev/null || return 0
+  /bin/mv -f "$tmp" "$file" >/dev/null 2>&1 || /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+  return 0
+}
+
 port_is_listening() {
   local port="$1"
   [[ "$port" =~ ^[0-9]+$ ]] || return 1
@@ -68,6 +80,7 @@ $(/usr/bin/env LC_ALL=C /usr/sbin/networksetup -listallnetworkservices 2>/dev/nu
 EOF
 }
 
+progress_update 8 "Проверка пакета…"
 [ "$(/usr/bin/uname -m)" = "x86_64" ] || fail "Этот установщик предназначен для Intel Mac."
 [ -x "$XRAY" ] || fail "В пакете отсутствует встроенный Xray-core."
 [ -f "$XRAY_SUMS" ] || fail "В пакете отсутствует контрольная сумма Xray-core."
@@ -85,8 +98,10 @@ fi
 
 /usr/bin/ruby -EUTF-8:UTF-8 -c "$CORE_HELPER" >/dev/null || fail "Основной Ruby helper поврежден."
 /usr/bin/ruby -EUTF-8:UTF-8 -c "$SUPERVISOR" >/dev/null || fail "Ruby supervisor поврежден."
+progress_update 18 "Проверка компонентов завершена"
 
 # Stop an already installed version only after the new package passed validation.
+progress_update 25 "Остановка предыдущей версии…"
 if [ -f "$APP_DIR/Contents/Resources/auto-xray-helper.rb" ]; then
   /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" \
     /usr/bin/ruby -EUTF-8:UTF-8 "$APP_DIR/Contents/Resources/auto-xray-helper.rb" stop >/dev/null 2>&1 || true
@@ -97,13 +112,16 @@ sleep 1
 # A previous proxy client may have left macOS pointing at dead localhost ports
 # (for example V2RayXS 127.0.0.1:8001 / 1081). If no process is listening,
 # those settings must not survive installation because AUTO Xray starts OFF.
+progress_update 35 "Подготовка системы…"
 sanitize_dead_local_proxies
 
 mkdir -p "$HOME/Applications"
 rm -rf "$APP_DIR"
 
+progress_update 43 "Создание приложения…"
 /usr/bin/osacompile -s -o "$APP_DIR" "$SRC"
 mkdir -p "$APP_DIR/Contents/Resources"
+progress_update 56 "Копирование компонентов…"
 
 # The original helper becomes the core implementation. The small supervisor keeps
 # the public helper name so the menu app does not need a second command path.
@@ -121,6 +139,7 @@ chmod 644 "$APP_DIR/Contents/Resources/auto-xray-helper.rb"
 chmod 644 "$APP_DIR/Contents/Resources/Dove.icns"
 chmod +x "$APP_DIR/Contents/Resources/xray"
 /usr/bin/xattr -dr com.apple.quarantine "$APP_DIR" >/dev/null 2>&1 || true
+progress_update 70 "Настройка приложения…"
 
 PLIST="$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
@@ -131,10 +150,12 @@ PLIST="$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${VERSION//./}" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION//./}" "$PLIST" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Dove.icns" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile Dove.icns" "$PLIST" 2>/dev/null || true
 
+progress_update 82 "Подпись и первичная настройка…"
 /usr/bin/codesign --force --sign - "$APP_DIR/Contents/Resources/xray" >/dev/null 2>&1 || true
 /usr/bin/codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
 /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$APP_DIR/Contents/Resources" \
   /usr/bin/ruby -EUTF-8:UTF-8 "$APP_DIR/Contents/Resources/auto-xray-helper.rb" bootstrap >/dev/null || fail "Первичная настройка не выполнена."
+progress_update 92 "Завершение настройки…"
 
 # Bootstrap must also leave direct internet working while AUTO Xray is OFF.
 sanitize_dead_local_proxies
@@ -146,8 +167,10 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchS
 if [ -x "$LSREGISTER" ]; then
   "$LSREGISTER" -f "$APP_DIR" >/dev/null 2>&1 || true
 fi
+progress_update 97 "Запуск AUTO Xray…"
 
 /usr/bin/open "$APP_DIR"
+progress_update 100 "Готово"
 
 # Successful ZIP installation must stay non-modal too. Errors are still shown by
 # the failure paths above. For a direct .command launch, only close its Terminal tab.
