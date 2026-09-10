@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/package-installer.yml'
       - 'RUN_AUTO_XRAY_TESTS.command'
+      - 'RUN_AUTO_XRAY_INSTALL_TEST.command'
       - 'scripts/install-catalina.command'
       - 'src/**'
   workflow_dispatch:
@@ -90,6 +91,7 @@ jobs:
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp RUN_AUTO_XRAY_TESTS.command "$PKG/RUN_AUTO_XRAY_TESTS.command"
+          cp RUN_AUTO_XRAY_INSTALL_TEST.command "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
@@ -118,15 +120,19 @@ jobs:
           Основной способ установки этой версии — DMG из GitHub Releases.
           Этот ZIP оставлен как резервный вариант.
 
+          Для полного замера установки:
+          1. Сначала запустите RUN_AUTO_XRAY_INSTALL_TEST.command и оставьте Terminal открытым.
+          2. Затем запустите INSTALL_AUTO_XRAY_CATALINA.command.
+          3. Монитор автоматически зафиксирует установку и первый запуск с таймингами.
+          4. После первого запуска он предложит начать RUN_AUTO_XRAY_TESTS.command.
+
+          Обычная установка без диагностики:
           1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
           2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
 
-          Для диагностики после установки можно запустить
-          RUN_AUTO_XRAY_TESTS.command. В ZIP сохранено право на выполнение,
-          поэтому отдельный chmod обычно не требуется.
-
+          Оба диагностических command-файла имеют право на выполнение.
           Telegram: Use system proxy settings.
 
           Не отключайте Gatekeeper глобально.
@@ -135,6 +141,7 @@ jobs:
 
           chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
                    "$PKG/RUN_AUTO_XRAY_TESTS.command" \
+                   "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command" \
                    "$PKG/scripts/install-catalina.command" \
                    "$PKG/UNINSTALL_AUTO_XRAY.command" \
                    "$PKG/vendor/xray/xray"
@@ -159,7 +166,7 @@ jobs:
           with zipfile.ZipFile(Path("dist") / f"{name}.zip") as archive:
               assert archive.testzip() is None, "Corrupt ZIP member"
               for relative in (
-                  "VERSION", "RUN_AUTO_XRAY_TESTS.command",
+                  "VERSION", "RUN_AUTO_XRAY_TESTS.command", "RUN_AUTO_XRAY_INSTALL_TEST.command",
                   "src/AUTO_Xray.applescript",
                   "src/auto-xray-helper.rb", "src/auto-xray-supervisor.rb",
                   "scripts/install-catalina.command",
@@ -177,7 +184,7 @@ jobs:
                   assert archive.read(f"{name}/{relative}") == Path(original).read_bytes(), relative
               for relative in (
                   "INSTALL_AUTO_XRAY_CATALINA.command", "RUN_AUTO_XRAY_TESTS.command",
-                  "scripts/install-catalina.command",
+                  "RUN_AUTO_XRAY_INSTALL_TEST.command", "scripts/install-catalina.command",
                   "UNINSTALL_AUTO_XRAY.command", "vendor/xray/xray",
               ):
                   mode = archive.getinfo(f"{name}/{relative}").external_attr >> 16
@@ -190,6 +197,7 @@ jobs:
           PKG="dist/AUTO_Xray_Catalina_Installer_v${VERSION}"
           bash -n "$PKG/INSTALL_AUTO_XRAY_CATALINA.command"
           bash -n "$PKG/RUN_AUTO_XRAY_TESTS.command"
+          bash -n "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command"
           bash -n "$PKG/scripts/install-catalina.command"
           ruby -c "$PKG/src/auto-xray-helper.rb"
           ruby -c "$PKG/src/auto-xray-supervisor.rb"
