@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/package-installer.yml'
+      - 'RUN_AUTO_XRAY_TESTS.command'
       - 'scripts/install-catalina.command'
       - 'src/**'
   workflow_dispatch:
@@ -88,6 +89,7 @@ jobs:
           mkdir -p "$PKG/src" "$PKG/assets" "$PKG/vendor/xray" "$PKG/scripts" "$PKG/docs"
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
+          cp RUN_AUTO_XRAY_TESTS.command "$PKG/RUN_AUTO_XRAY_TESTS.command"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
@@ -121,6 +123,10 @@ jobs:
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
 
+          Для диагностики после установки можно запустить
+          RUN_AUTO_XRAY_TESTS.command. В ZIP сохранено право на выполнение,
+          поэтому отдельный chmod обычно не требуется.
+
           Telegram: Use system proxy settings.
 
           Не отключайте Gatekeeper глобально.
@@ -128,6 +134,7 @@ jobs:
           EOF
 
           chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
+                   "$PKG/RUN_AUTO_XRAY_TESTS.command" \
                    "$PKG/scripts/install-catalina.command" \
                    "$PKG/UNINSTALL_AUTO_XRAY.command" \
                    "$PKG/vendor/xray/xray"
@@ -152,7 +159,8 @@ jobs:
           with zipfile.ZipFile(Path("dist") / f"{name}.zip") as archive:
               assert archive.testzip() is None, "Corrupt ZIP member"
               for relative in (
-                  "VERSION", "src/AUTO_Xray.applescript",
+                  "VERSION", "RUN_AUTO_XRAY_TESTS.command",
+                  "src/AUTO_Xray.applescript",
                   "src/auto-xray-helper.rb", "src/auto-xray-supervisor.rb",
                   "scripts/install-catalina.command",
                   "vendor/xray/XRAY_SHA256.txt",
@@ -168,7 +176,7 @@ jobs:
               ):
                   assert archive.read(f"{name}/{relative}") == Path(original).read_bytes(), relative
               for relative in (
-                  "INSTALL_AUTO_XRAY_CATALINA.command",
+                  "INSTALL_AUTO_XRAY_CATALINA.command", "RUN_AUTO_XRAY_TESTS.command",
                   "scripts/install-catalina.command",
                   "UNINSTALL_AUTO_XRAY.command", "vendor/xray/xray",
               ):
@@ -181,6 +189,7 @@ jobs:
           PY
           PKG="dist/AUTO_Xray_Catalina_Installer_v${VERSION}"
           bash -n "$PKG/INSTALL_AUTO_XRAY_CATALINA.command"
+          bash -n "$PKG/RUN_AUTO_XRAY_TESTS.command"
           bash -n "$PKG/scripts/install-catalina.command"
           ruby -c "$PKG/src/auto-xray-helper.rb"
           ruby -c "$PKG/src/auto-xray-supervisor.rb"
