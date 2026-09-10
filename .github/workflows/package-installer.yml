@@ -6,10 +6,9 @@ on:
   pull_request:
     paths:
       - '.github/workflows/package-installer.yml'
-      - 'RUN_AUTO_XRAY_TESTS.command'
-      - 'RUN_AUTO_XRAY_INSTALL_TEST.command'
       - 'scripts/install-catalina.command'
       - 'src/**'
+      - 'VERSION'
   workflow_dispatch:
 
 permissions:
@@ -90,8 +89,6 @@ jobs:
           mkdir -p "$PKG/src" "$PKG/assets" "$PKG/vendor/xray" "$PKG/scripts" "$PKG/docs"
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
-          cp RUN_AUTO_XRAY_TESTS.command "$PKG/RUN_AUTO_XRAY_TESTS.command"
-          cp RUN_AUTO_XRAY_INSTALL_TEST.command "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
@@ -120,19 +117,12 @@ jobs:
           Основной способ установки этой версии — DMG из GitHub Releases.
           Этот ZIP оставлен как резервный вариант.
 
-          Для полного замера установки:
-          1. Сначала запустите RUN_AUTO_XRAY_INSTALL_TEST.command и оставьте Terminal открытым.
-          2. Затем запустите INSTALL_AUTO_XRAY_CATALINA.command.
-          3. Монитор автоматически зафиксирует установку и первый запуск с таймингами.
-          4. После первого запуска он предложит начать RUN_AUTO_XRAY_TESTS.command.
-
-          Обычная установка без диагностики:
+          Установка:
           1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
           2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
-          3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
+          3. После установки нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
 
-          Оба диагностических command-файла имеют право на выполнение.
           Telegram: Use system proxy settings.
 
           Не отключайте Gatekeeper глобально.
@@ -140,8 +130,6 @@ jobs:
           EOF
 
           chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
-                   "$PKG/RUN_AUTO_XRAY_TESTS.command" \
-                   "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command" \
                    "$PKG/scripts/install-catalina.command" \
                    "$PKG/UNINSTALL_AUTO_XRAY.command" \
                    "$PKG/vendor/xray/xray"
@@ -165,10 +153,20 @@ jobs:
           name = f"AUTO_Xray_Catalina_Installer_v{os.environ['VERSION']}"
           with zipfile.ZipFile(Path("dist") / f"{name}.zip") as archive:
               assert archive.testzip() is None, "Corrupt ZIP member"
+              members = archive.namelist()
+              forbidden = (
+                  "RUN_AUTO_XRAY_TESTS.command",
+                  "RUN_AUTO_XRAY_INSTALL_TEST.command",
+                  "TEST_INSTALLER_UI.command",
+                  "/Diagnostics/",
+              )
+              for marker in forbidden:
+                  assert not any(marker in member for member in members), f"Diagnostic helper leaked into public ZIP: {marker}"
               for relative in (
-                  "VERSION", "RUN_AUTO_XRAY_TESTS.command", "RUN_AUTO_XRAY_INSTALL_TEST.command",
+                  "VERSION",
                   "src/AUTO_Xray.applescript",
-                  "src/auto-xray-helper.rb", "src/auto-xray-supervisor.rb",
+                  "src/auto-xray-helper.rb",
+                  "src/auto-xray-supervisor.rb",
                   "scripts/install-catalina.command",
                   "vendor/xray/XRAY_SHA256.txt",
               ):
@@ -183,21 +181,20 @@ jobs:
               ):
                   assert archive.read(f"{name}/{relative}") == Path(original).read_bytes(), relative
               for relative in (
-                  "INSTALL_AUTO_XRAY_CATALINA.command", "RUN_AUTO_XRAY_TESTS.command",
-                  "RUN_AUTO_XRAY_INSTALL_TEST.command", "scripts/install-catalina.command",
-                  "UNINSTALL_AUTO_XRAY.command", "vendor/xray/xray",
+                  "INSTALL_AUTO_XRAY_CATALINA.command",
+                  "scripts/install-catalina.command",
+                  "UNINSTALL_AUTO_XRAY.command",
+                  "vendor/xray/xray",
               ):
                   mode = archive.getinfo(f"{name}/{relative}").external_attr >> 16
                   assert mode & stat.S_IXUSR, f"Missing executable permission: {relative}"
               core = archive.read(f"{name}/vendor/xray/xray")
               expected = archive.read(f"{name}/vendor/xray/XRAY_SHA256.txt").decode().split()[0]
               assert hashlib.sha256(core).hexdigest() == expected, "Xray checksum mismatch"
-          print("ZIP contents, source parity, permissions and Xray checksum verified")
+          print("ZIP contents, source parity, permissions, Xray checksum and clean public payload verified")
           PY
           PKG="dist/AUTO_Xray_Catalina_Installer_v${VERSION}"
           bash -n "$PKG/INSTALL_AUTO_XRAY_CATALINA.command"
-          bash -n "$PKG/RUN_AUTO_XRAY_TESTS.command"
-          bash -n "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command"
           bash -n "$PKG/scripts/install-catalina.command"
           ruby -c "$PKG/src/auto-xray-helper.rb"
           ruby -c "$PKG/src/auto-xray-supervisor.rb"
