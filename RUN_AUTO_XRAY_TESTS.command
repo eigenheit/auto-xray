@@ -24,6 +24,7 @@ WORLD_MANUAL_OK=0
 WORKING_AUTO_GROUP=""
 TIMED_MS=0
 TIMED_OUTPUT=""
+FRESH_NODE_SNAPSHOT_READY=0
 
 mkdir -p "$OUT_DIR"
 : > "$REPORT"
@@ -173,12 +174,105 @@ capture_runtime_delta() {
   fi
 }
 
+fresh_group_exists() {
+  [ "$FRESH_NODE_SNAPSHOT_READY" -eq 1 ] || return 1
+  /usr/bin/awk -F'\t' -v group="$1" '$1 == group && $2 != "" { found=1; exit } END { exit(found ? 0 : 1) }' "$NODES_OUT"
+}
+
+fresh_node_exists() {
+  local group="$1" node_id="$2"
+  [ "$FRESH_NODE_SNAPSHOT_READY" -eq 1 ] || return 1
+  /usr/bin/awk -F'\t' -v group="$group" -v id="$node_id" \
+    '$1 == group && $2 == id { found=1; exit } END { exit(found ? 0 : 1) }' "$NODES_OUT"
+}
+
+fresh_node_name() {
+  local group="$1" node_id="$2"
+  /usr/bin/awk -F'\t' -v group="$group" -v id="$node_id" \
+    '$1 == group && $2 == id { print $3; exit }' "$NODES_OUT"
+}
+
+fresh_group_nodes() {
+  local group="$1"
+  /usr/bin/awk -F'\t' -v group="$group" '$1 == group && $2 != "" { print $2 }' "$NODES_OUT"
+}
+
+fresh_group_count() {
+  local group="$1"
+  /usr/bin/awk -F'\t' -v group="$group" '$1 == group && $2 != "" { n++ } END { print n + 0 }' "$NODES_OUT"
+}
+
+preferred_fresh_group() {
+  if fresh_group_exists RF; then
+    echo RF
+  elif fresh_group_exists EU; then
+    echo EU
+  elif fresh_group_exists WORLD; then
+    echo WORLD
+  else
+    echo ""
+  fi
+}
+
+refresh_node_snapshot() {
+  local expected_count="$1" tmp snapshot_count duplicate_ids malformed
+  tmp="${TMPDIR:-/tmp}/auto-xray-fresh-nodes-${UID:-0}-$$.txt"
+  if ! run_helper menu-nodes > "$tmp" 2>>"$REPORT"; then
+    /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+    mark_fail "Не удалось получить список узлов сразу после обновления подписки."
+    return 1
+  fi
+
+  snapshot_count="$(/usr/bin/awk -F'\t' 'NF >= 4 && $1 ~ /^(RF|EU|WORLD)$/ && $2 != "" { n++ } END { print n + 0 }' "$tmp")"
+  malformed="$(/usr/bin/awk -F'\t' 'NF < 4 || $1 !~ /^(RF|EU|WORLD)$/ || $2 == "" { print NR ":" $0 }' "$tmp")"
+  duplicate_ids="$(/usr/bin/awk -F'\t' 'NF >= 2 && $2 != "" { print $2 }' "$tmp" | /usr/bin/sort | /usr/bin/uniq -d)"
+
+  if [ -n "$malformed" ]; then
+    log "Некорректные строки свежего menu-nodes:"
+    /usr/bin/printf '%s\n' "$malformed" >> "$REPORT"
+    /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+    mark_fail "Свежий список узлов содержит некорректные строки."
+    return 1
+  fi
+  if [ -n "$duplicate_ids" ]; then
+    log "Повторяющиеся id в свежем menu-nodes:"
+    /usr/bin/printf '%s\n' "$duplicate_ids" >> "$REPORT"
+    /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+    mark_fail "Свежий список узлов содержит повторяющиеся id."
+    return 1
+  fi
+  if ! [ "$expected_count" -eq "$snapshot_count" ] 2>/dev/null; then
+    /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+    mark_fail "menu-state сообщает $expected_count узлов, а свежий menu-nodes после update содержит $snapshot_count."
+    return 1
+  fi
+  if [ "$snapshot_count" -le 0 ]; then
+    /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+    mark_fail "Свежий список узлов после update пуст."
+    return 1
+  fi
+
+  /bin/mv "$tmp" "$NODES_OUT"
+  FRESH_NODE_SNAPSHOT_READY=1
+  mark_pass "Зафиксирован свежий snapshot подписки: $snapshot_count узлов; RF=$(fresh_group_count RF), EU=$(fresh_group_count EU), WORLD=$(fresh_group_count WORLD)."
+  return 0
+}
+
 restore_original_mode() {
+  local fallback
   run_helper stop >/dev/null 2>&1 || true
   if [ "$ORIG_TYPE" = "manual" ] && [ -n "$ORIG_VALUE" ]; then
-    run_helper mode manual "$ORIG_VALUE" >/dev/null 2>&1 || true
-  elif [ -n "$ORIG_VALUE" ]; then
+    if fresh_node_exists RF "$ORIG_VALUE" || fresh_node_exists EU "$ORIG_VALUE" || fresh_node_exists WORLD "$ORIG_VALUE"; then
+      run_helper mode manual "$ORIG_VALUE" >/dev/null 2>&1 || true
+    else
+      fallback="$(preferred_fresh_group)"
+      [ -n "$fallback" ] && run_helper mode auto "$fallback" >/dev/null 2>&1 || true
+    fi
+  elif [ -n "$ORIG_VALUE" ] && fresh_group_exists "$ORIG_VALUE"; then
     run_helper mode auto "$ORIG_VALUE" >/dev/null 2>&1 || true
+  else
+    fallback="$(preferred_fresh_group)"
+    [ -n "$fallback" ] && run_helper mode auto "$fallback" >/dev/null 2>&1 || true
   fi
 }
 
@@ -205,7 +299,8 @@ finish() {
 
   log ""
   log "SUMMARY: PASS=$PASS WARN=$WARN FAIL=$FAIL"
-  log "AUTO Xray оставлен в состоянии OFF; исходный выбранный режим восстановлен."
+  log "AUTO Xray оставлен в состоянии OFF; исходный выбранный режим восстановлен только если он существует в свежей подписке."
+  log "Свежий snapshot узлов: $NODES_OUT"
   log "Логи: $OUT_DIR"
   log "Тайминги: $TIMINGS_OUT"
 
@@ -290,9 +385,18 @@ if ! [ "$NODE_COUNT" -gt 0 ] 2>/dev/null; then
   mark_fail "После обновления подписки нет узлов для теста."
   exit 1
 fi
-mark_pass "Свежий список узлов доступен ($NODE_COUNT узлов)."
+if ! refresh_node_snapshot "$NODE_COUNT"; then
+  exit 1
+fi
 
-run_helper menu-nodes > "$NODES_OUT" 2>&1 || true
+log ""
+log "Свежие WORLD-узлы после update:"
+if fresh_group_exists WORLD; then
+  /usr/bin/awk -F'\t' '$1 == "WORLD" { printf "  %s\t%s\t%s\n", $2, $3, $4 }' "$NODES_OUT" | /usr/bin/tee -a "$REPORT"
+else
+  log "  отсутствуют"
+fi
+
 log ""
 log "=== 2. Baseline OFF ==="
 if run_timed_helper "baseline-stop" stop; then
@@ -313,8 +417,8 @@ fi
 
 try_auto_group() {
   local group="$1" output socks http
-  if ! /usr/bin/grep -q "^${group}[[:space:]]" "$NODES_OUT" 2>/dev/null; then
-    mark_warn "Группа $group отсутствует в подписке; пропуск."
+  if ! fresh_group_exists "$group"; then
+    mark_warn "Группа $group отсутствует в свежей подписке после update; пропуск."
     return 0
   fi
 
@@ -359,24 +463,22 @@ try_auto_group() {
 }
 
 log ""
-log "=== 3. Start on RF ==="
-if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null; then
-  run_helper mode auto RF >> "$REPORT" 2>&1 || true
-elif /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
-  run_helper mode auto EU >> "$REPORT" 2>&1 || true
-else
-  FIRST_GROUP="$(/usr/bin/head -n 1 "$NODES_OUT" | /usr/bin/awk -F'\t' '{print $1}')"
-  [ -n "$FIRST_GROUP" ] && run_helper mode auto "$FIRST_GROUP" >> "$REPORT" 2>&1 || true
+log "=== 3. Start on fresh baseline group ==="
+FIRST_GROUP="$(preferred_fresh_group)"
+if [ -z "$FIRST_GROUP" ]; then
+  mark_fail "В свежей подписке нет ни одной тестируемой группы."
+  exit 1
 fi
+run_helper mode auto "$FIRST_GROUP" >> "$REPORT" 2>&1 || true
 
 if run_timed_helper "base-start" start; then
   START_OUT="$TIMED_OUTPUT"
-  mark_pass "AUTO Xray включился: $START_OUT"
+  mark_pass "AUTO Xray включился на свежей группе $FIRST_GROUP: $START_OUT"
   check_fast_start "Базовый старт" "$TIMED_MS"
   record_menu_refresh_timing "base-on"
 else
   START_OUT="$TIMED_OUTPUT"
-  mark_warn "AUTO Xray не смог стартовать на базовой группе за ${TIMED_MS} ms: $START_OUT"
+  mark_warn "AUTO Xray не смог стартовать на свежей группе $FIRST_GROUP за ${TIMED_MS} ms: $START_OUT"
 fi
 
 try_auto_group RF || true
@@ -386,19 +488,17 @@ try_auto_group WORLD || true
 prepare_manual_baseline() {
   local node_id="$1" group state socks
   group="$WORKING_AUTO_GROUP"
+  if [ -z "$group" ] || ! fresh_group_exists "$group"; then
+    group="$(preferred_fresh_group)"
+  fi
   if [ -z "$group" ]; then
-    if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null; then
-      group="RF"
-    elif /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
-      group="EU"
-    else
-      group="WORLD"
-    fi
+    mark_warn "Manual baseline $node_id: нет свежей AUTO-группы для baseline."
+    return 1
   fi
 
   run_helper stop >> "$REPORT" 2>&1 || true
   if ! run_helper mode auto "$group" >> "$REPORT" 2>&1; then
-    mark_warn "Manual baseline $node_id: не удалось выбрать AUTO $group."
+    mark_warn "Manual baseline $node_id: не удалось выбрать свежую AUTO $group."
     return 1
   fi
   if ! run_timed_helper "manual-baseline-$node_id" start; then
@@ -420,14 +520,18 @@ prepare_manual_baseline() {
 }
 
 log ""
-log "=== 4. Manual WORLD nodes ==="
-WORLD_IDS="$(/usr/bin/awk -F'\t' '$1 == "WORLD" {print $2}' "$NODES_OUT" 2>/dev/null)"
+log "=== 4. Manual WORLD nodes from fresh subscription snapshot ==="
+WORLD_IDS="$(fresh_group_nodes WORLD)"
 if [ -z "$WORLD_IDS" ]; then
-  mark_warn "Ручные WORLD-узлы отсутствуют."
+  mark_warn "В свежей подписке после update нет ручных WORLD-узлов; секция пропущена."
 else
   for node_id in $WORLD_IDS; do
-    node_name="$(/usr/bin/awk -F'\t' -v id="$node_id" '$2 == id {print $3; exit}' "$NODES_OUT")"
-    log "-- manual $node_id $node_name"
+    if ! fresh_node_exists WORLD "$node_id"; then
+      mark_fail "WORLD id $node_id отсутствует в свежем snapshot; тест этого id запрещён."
+      continue
+    fi
+    node_name="$(fresh_node_name WORLD "$node_id")"
+    log "-- fresh manual WORLD: $node_id $node_name"
 
     if ! prepare_manual_baseline "$node_id"; then
       mark_warn "Manual $node_name: тест узла пропущен, потому что не удалось восстановить известный рабочий AUTO baseline."
@@ -464,14 +568,14 @@ else
 fi
 
 if [ "$WORLD_MANUAL_OK" -gt 0 ] && [ "$AUTO_WORLD_OK" -ne 1 ]; then
-  mark_fail "AUTO WORLD не работает, хотя хотя бы один ручной WORLD-узел прошёл probe. Это ошибка AUTO-переключения, а не только удалённого узла."
+  mark_fail "AUTO WORLD не работает, хотя хотя бы один свежий ручной WORLD-узел прошёл probe. Это ошибка AUTO-переключения, а не только удалённого узла."
 elif [ "$WORLD_MANUAL_OK" -gt 0 ] && [ "$AUTO_WORLD_OK" -eq 1 ]; then
-  mark_pass "AUTO WORLD использовал рабочий узел при наличии доступного WORLD-кандидата."
+  mark_pass "AUTO WORLD использовал рабочий узел из свежей подписки при наличии доступного WORLD-кандидата."
 fi
 
 log ""
 log "=== 5. Watchdog / mode-switch concurrency ==="
-if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null && /usr/bin/grep -q '^EU[[:space:]]' "$NODES_OUT" 2>/dev/null; then
+if fresh_group_exists RF && fresh_group_exists EU; then
   run_helper mode auto RF >> "$REPORT" 2>&1 || true
   (
     i=0
@@ -498,14 +602,18 @@ if /usr/bin/grep -q '^RF[[:space:]]' "$NODES_OUT" 2>/dev/null && /usr/bin/grep -
     mark_warn "BUSY не наблюдался; гонка могла не воспроизвестись в этом запуске."
   fi
 else
-  mark_warn "Для concurrency-теста нужны одновременно RF и EU; тест пропущен."
+  mark_warn "Для concurrency-теста нужны одновременно свежие RF и EU; тест пропущен."
 fi
 
 log ""
 log "=== 6. Repeated ON/OFF ==="
-if [ -n "$WORKING_AUTO_GROUP" ]; then
+if [ -n "$WORKING_AUTO_GROUP" ] && fresh_group_exists "$WORKING_AUTO_GROUP"; then
   run_helper stop >> "$REPORT" 2>&1 || true
   run_helper mode auto "$WORKING_AUTO_GROUP" >> "$REPORT" 2>&1 || true
+else
+  WORKING_AUTO_GROUP="$(preferred_fresh_group)"
+  run_helper stop >> "$REPORT" 2>&1 || true
+  [ -n "$WORKING_AUTO_GROUP" ] && run_helper mode auto "$WORKING_AUTO_GROUP" >> "$REPORT" 2>&1 || true
 fi
 
 i=1

@@ -109,6 +109,7 @@ jobs:
           grep -Fq 'def resilient_start(allow_fallback: nil)' src/auto-xray-supervisor.rb
           grep -Fq 'manual start failed; same-node recovery skipped' src/auto-xray-supervisor.rb
           grep -Fq 'resilient_start(allow_fallback: !target_manual)' src/auto-xray-supervisor.rb
+          grep -Fq 'manual target failed; redundant stop before rollback skipped' src/auto-xray-supervisor.rb
 
       - name: Guard executable diagnostic packaging
         shell: bash
@@ -134,14 +135,26 @@ jobs:
           grep -Fq '=== 1. Refresh subscription ===' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'run_timed_helper "subscription-update" update' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'тесты на устаревшем списке узлов не запускаются' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'refresh_node_snapshot "$NODE_COUNT"' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'menu-state сообщает $expected_count узлов, а свежий menu-nodes после update содержит $snapshot_count' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'fresh_group_exists "$group"' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'WORLD_IDS="$(fresh_group_nodes WORLD)"' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'fresh_node_exists WORLD "$node_id"' RUN_AUTO_XRAY_TESTS.command
+          grep -Fq 'Manual WORLD nodes from fresh subscription snapshot' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'prepare_manual_baseline' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'WORKING_AUTO_GROUP' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'check_manual_switch_budget' RUN_AUTO_XRAY_TESTS.command
-          update_line="$(grep -nF 'run_timed_helper "subscription-update" update' RUN_AUTO_XRAY_TESTS.command | head -n1 | cut -d: -f1)"
-          nodes_line="$(grep -nF 'run_helper menu-nodes > "$NODES_OUT"' RUN_AUTO_XRAY_TESTS.command | head -n1 | cut -d: -f1)"
-          test -n "$update_line" -a -n "$nodes_line"
-          if [ "$update_line" -ge "$nodes_line" ]; then
-            echo 'Runtime self-test must refresh the subscription before consuming the node list.' >&2
+
+          update_line="$(grep -nF 'run_timed_helper "subscription-update" update' RUN_AUTO_XRAY_TESTS.command | tail -n1 | cut -d: -f1)"
+          snapshot_line="$(grep -nF 'refresh_node_snapshot "$NODE_COUNT"' RUN_AUTO_XRAY_TESTS.command | tail -n1 | cut -d: -f1)"
+          world_line="$(grep -nF 'WORLD_IDS="$(fresh_group_nodes WORLD)"' RUN_AUTO_XRAY_TESTS.command | tail -n1 | cut -d: -f1)"
+          test -n "$update_line" -a -n "$snapshot_line" -a -n "$world_line"
+          if [ "$update_line" -ge "$snapshot_line" ] || [ "$snapshot_line" -ge "$world_line" ]; then
+            echo 'Runtime self-test must refresh, snapshot the fresh nodes, then derive WORLD tests from that snapshot.' >&2
+            exit 1
+          fi
+          if grep -Eq 'world-0[0-9]|WORLD-[0-9]' RUN_AUTO_XRAY_TESTS.command; then
+            echo 'Runtime self-test must not hard-code WORLD node ids.' >&2
             exit 1
           fi
           if grep -Fq '/usr/bin/expr "$now" - "$START_MS"' RUN_AUTO_XRAY_INSTALL_TEST.command; then
