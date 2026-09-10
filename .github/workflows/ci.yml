@@ -47,18 +47,34 @@ jobs:
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
           grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
-      - name: Validate Gatekeeper-safe Catalina installer progress UI
+      - name: Validate Catalina installer progress lifecycle
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq '/usr/bin/python - "$1" "$2"' scripts/TEST_INSTALLER_UI.command
-          grep -Fq '/usr/bin/python - "$1" "$2"' scripts/dmg-installer-launcher.sh
-          grep -Fq 'from AppKit import *' scripts/TEST_INSTALLER_UI.command
-          grep -Fq 'from AppKit import *' scripts/dmg-installer-launcher.sh
+          /usr/bin/xcrun clang \
+            -arch x86_64 \
+            -mmacosx-version-min=10.15 \
+            -fobjc-arc \
+            -framework Cocoa \
+            scripts/dmg-install-progress.m \
+            -o /tmp/AUTO_Xray_installer_progress
+          test -x /tmp/AUTO_Xray_installer_progress
+          /usr/bin/file /tmp/AUTO_Xray_installer_progress | grep -Fq 'x86_64'
+          grep -Fq '[progress setIndeterminate:NO]' scripts/dmg-install-progress.m
+          grep -Fq 'PROGRESS_READY' scripts/dmg-installer-launcher.sh
+          grep -Fq 'Progress UI ready before installation' scripts/dmg-installer-launcher.sh
+          grep -Fq 'AUTO_XRAY_PROGRESS_FILE="$PROGRESS_STATE"' scripts/dmg-installer-launcher.sh
+          grep -Fq 'progress_update 43 "Создание приложения…"' scripts/install-catalina.command
+          grep -Fq 'progress_update 100 "Готово"' scripts/install-catalina.command
+          grep -Fq '/usr/bin/python - "$1" "$2" "$3" "$4"' scripts/TEST_INSTALLER_UI.command
           grep -Fq 'Installer app touched: no' scripts/TEST_INSTALLER_UI.command
-          grep -Fq 'Этот тест НЕ запускает и НЕ открывает Install AUTO Xray.app.' scripts/TEST_INSTALLER_UI.command
+          grep -Fq 'Progress mode: determinate simulated stages' scripts/TEST_INSTALLER_UI.command
           if grep -Fq 'Install AUTO Xray.app/Contents/Resources/installer-progress' scripts/TEST_INSTALLER_UI.command; then
             echo 'Preflight must not execute a helper from the quarantined installer app bundle.' >&2
+            exit 1
+          fi
+          if grep -Fq 'Окно закроется автоматически' scripts/dmg-install-progress.m scripts/dmg-installer-launcher.sh scripts/TEST_INSTALLER_UI.command; then
+            echo 'Installer UI must not contain auto-close explanatory text.' >&2
             exit 1
           fi
 
