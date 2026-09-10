@@ -270,9 +270,6 @@ def fallback_start
       next
     end
 
-    # A live process with a remote connectivity failure is not helped by
-    # restarting Xray for another minute. Give the concurrent AUTO balancer a
-    # short settling budget; manual nodes get two quick probes, then fail fast.
     ok = false
     probe_count = auto_group ? 3 : 2
     probe_count.times do |i|
@@ -303,37 +300,10 @@ def fallback_start
     f.close
     stop_pid(pid)
     cleanup_orphan_runtime
-    # Reserve the second process attempt for an immediate local Xray exit.
-    # A live process whose remote probes failed has already established the
-    # network failure and should return control to the user promptly.
     break
   end
 
   raise "proxy probe failed after automatic retry: #{last_error}"
-end
-
-def resilient_start
-  # Happy-path ON must not pay for a full scan of every network service. The
-  # core helper already restores AUTO Xray's saved proxy state when necessary;
-  # broad stale-proxy cleanup remains on actual recovery/failure paths.
-  rc, out, err = helper(['start'])
-  return [rc, out, err] if rc.zero?
-
-  first_error = (err.empty? ? out : err).strip
-  log("normal start failed, trying supervisor recovery: #{first_error}")
-
-  begin
-    # The core helper may have sent TERM after a failed startup probe but not yet
-    # released 2081/9001. Remove only AUTO Xray listeners before retrying.
-    cleanup_orphan_runtime
-    fallback_start
-    [0, "ON\n", '']
-  rescue StandardError => e
-    helper(['stop'])
-    cleanup_orphan_runtime
-    disable_stale_auto_proxies
-    [50, '', "ERROR: #{e.message}\n"]
-  end
 end
 
 def read_menu_state
@@ -343,6 +313,46 @@ def read_menu_state
   parsed.is_a?(Hash) ? parsed : nil
 rescue StandardError
   nil
+end
+
+def selected_manual_mode?
+  state = read_menu_state
+  mode = state && state['mode']
+  mode.is_a?(Hash) && mode['type'] == 'manual'
+rescue StandardError
+  false
+end
+
+def resilient_start(allow_fallback: nil)
+  # A manual mode has exactly one remote endpoint. Retrying the same dead node
+  # through supervisor fallback only multiplies the wait without adding a new
+  # candidate. AUTO groups keep recovery because another sibling may work.
+  allow_fallback = !selected_manual_mode? if allow_fallback.nil?
+
+  rc, out, err = helper(['start'])
+  return [rc, out, err] if rc.zero?
+
+  first_error = (err.empty? ? out : err).strip
+  unless allow_fallback
+    log("manual start failed; same-node recovery skipped: #{first_error}")
+    if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
+      cleanup_orphan_runtime
+    end
+    return [rc, out, err]
+  end
+
+  log("normal AUTO start failed, trying supervisor recovery: #{first_error}")
+
+  begin
+    cleanup_orphan_runtime
+    fallback_start
+    [0, "ON\n", '']
+  rescue StandardError => e
+    helper(['stop'])
+    cleanup_orphan_runtime
+    disable_stale_auto_proxies
+    [50, '', "ERROR: #{e.message}\n"]
+  end
 end
 
 def mode_args(mode)
@@ -364,19 +374,15 @@ def resilient_mode(args)
   old_mode = state['mode'].is_a?(Hash) ? state['mode'] : { 'type' => 'auto', 'group' => 'RF' }
   old_args = mode_args(old_mode)
   target = args.join(' ')
+  target_manual = args.first == 'manual'
   log("foreground mode switch started: #{target}")
 
-  # Switch while OFF so the core helper only stores the requested mode. The
-  # supervisor then owns startup/retry semantics and can recover AUTO groups
-  # when one candidate node is unavailable.
   src0, sout0, serr0 = helper(['stop'])
   unless src0.zero?
     cleanup_orphan_runtime
     disable_stale_auto_proxies
     return [src0, sout0, serr0]
   end
-  # Normal mode changes should not run the expensive recovery scan. Keep the
-  # orphan safeguard only when a listener actually survived the stop.
   if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
     cleanup_orphan_runtime
   end
@@ -386,7 +392,7 @@ def resilient_mode(args)
     return [mrc, mout, merr]
   end
 
-  src, sout, serr = resilient_start
+  src, sout, serr = resilient_start(allow_fallback: !target_manual)
   if src.zero?
     log("foreground mode switch succeeded: #{target}")
     return [0, '', '']
@@ -395,9 +401,13 @@ def resilient_mode(args)
   target_error = (serr.empty? ? sout : serr).strip
   log("foreground mode switch failed: #{target}: #{target_error}")
 
+  # Core helper restores the saved system proxy state on a failed start. Avoid
+  # an expensive all-services stale-proxy scan before rollback; keep the broad
+  # cleanup only if rollback itself fails.
   helper(['stop'])
-  cleanup_orphan_runtime
-  disable_stale_auto_proxies
+  if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
+    cleanup_orphan_runtime
+  end
 
   rollback_error = ''
   if old_args
@@ -503,8 +513,6 @@ when 'start'
   print_helper_result(*result)
 when 'ensure-proxy'
   result = with_runtime_lock(nonblocking: true) { supervisor_health }
-  # A user action is already switching/stopping/starting the runtime. The
-  # background watchdog must get out of the way instead of racing it.
   result ||= [0, "BUSY\n", '']
   print_helper_result(*result)
 when 'stop'
@@ -512,8 +520,6 @@ when 'stop'
     File.delete(HEALTH_FILE) rescue nil
     rc, out, err = helper(['stop'] + args)
     if rc.zero?
-      # Normal OFF is a fast path. The core helper has restored the saved proxy
-      # state; only invoke orphan cleanup if a listener is still present.
       if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
         cleanup_orphan_runtime
       end
