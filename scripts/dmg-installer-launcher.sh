@@ -3,7 +3,7 @@ set -u
 
 BUNDLE_ROOT="$(cd "$(dirname "$0")/.." && /bin/pwd)"
 PAYLOAD="$BUNDLE_ROOT/Resources/payload"
-PROGRESS_SCRIPT="$BUNDLE_ROOT/Resources/dmg-install-progress.js"
+PROGRESS_HELPER="$BUNDLE_ROOT/Resources/installer-progress"
 LOG_DIR="$HOME/Library/Logs/AUTO Xray"
 LOG_FILE="$LOG_DIR/installer.log"
 PROGRESS_DONE="${TMPDIR:-/tmp}/auto-xray-install-progress-${UID:-0}-$$.done"
@@ -19,8 +19,8 @@ APPLESCRIPT
 
 start_progress() {
   /bin/rm -f "$PROGRESS_DONE" >/dev/null 2>&1 || true
-  [ -f "$PROGRESS_SCRIPT" ] || return 0
-  /usr/bin/osascript -l JavaScript "$PROGRESS_SCRIPT" "$PROGRESS_DONE" "$VERSION" >/dev/null 2>&1 &
+  [ -x "$PROGRESS_HELPER" ] || return 0
+  "$PROGRESS_HELPER" "$PROGRESS_DONE" "$VERSION" >/dev/null 2>&1 &
   PROGRESS_PID=$!
 }
 
@@ -28,7 +28,7 @@ stop_progress() {
   /usr/bin/touch "$PROGRESS_DONE" >/dev/null 2>&1 || true
   if [ -n "$PROGRESS_PID" ]; then
     local i=0
-    while /bin/kill -0 "$PROGRESS_PID" >/dev/null 2>&1 && [ "$i" -lt 20 ]; do
+    while /bin/kill -0 "$PROGRESS_PID" >/dev/null 2>&1 && [ "$i" -lt 30 ]; do
       /bin/sleep 0.1
       i=$((i + 1))
     done
