@@ -401,12 +401,17 @@ def resilient_mode(args)
   target_error = (serr.empty? ? sout : serr).strip
   log("foreground mode switch failed: #{target}: #{target_error}")
 
-  # Core helper restores the saved system proxy state on a failed start. Avoid
-  # an expensive all-services stale-proxy scan before rollback; keep the broad
-  # cleanup only if rollback itself fails.
-  helper(['stop'])
-  if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
-    cleanup_orphan_runtime
+  # For a failed manual target resilient_start already skips same-node recovery,
+  # reaps any leftover AUTO Xray listener, and the core helper restores the prior
+  # system proxy state. Running helper stop again repeats networksetup work and
+  # adds seconds to the user-visible failure path without improving cleanup.
+  unless target_manual
+    helper(['stop'])
+    if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
+      cleanup_orphan_runtime
+    end
+  else
+    log('manual target failed; redundant stop before rollback skipped')
   end
 
   rollback_error = ''
