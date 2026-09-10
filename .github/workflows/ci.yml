@@ -1,1 +1,138 @@
 name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate source
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in scripts/*.command scripts/*.sh RUN_AUTO_XRAY_TESTS.command RUN_AUTO_XRAY_INSTALL_TEST.command; do
+            [ -e "$f" ] || continue
+            echo "Checking $f"
+            /bin/bash -n "$f"
+          done
+
+      - name: Validate Ruby helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby --version
+          ruby -c src/auto-xray-helper.rb
+          ruby -c src/auto-xray-supervisor.rb
+
+      - name: Compile AppleScript menu app
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          GENERATED="/tmp/AUTO_Xray.generated.applescript"
+          sed -E "s/2\.5\.[0-9]+/${VERSION}/g" src/AUTO_Xray.applescript > "$GENERATED"
+          rm -rf "/tmp/AUTO Xray.app"
+          /usr/bin/osacompile -s -o "/tmp/AUTO Xray.app" "$GENERATED"
+          grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
+          grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
+
+      - name: Validate Catalina installer progress lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/xcrun clang \
+            -arch x86_64 \
+            -mmacosx-version-min=10.15 \
+            -fobjc-arc \
+            -framework Cocoa \
+            scripts/dmg-install-progress.m \
+            -o /tmp/AUTO_Xray_installer_progress
+          test -x /tmp/AUTO_Xray_installer_progress
+          /usr/bin/file /tmp/AUTO_Xray_installer_progress | grep -Fq 'x86_64'
+          grep -Fq '[progress setIndeterminate:NO]' scripts/dmg-install-progress.m
+          grep -Fq 'PROGRESS_READY' scripts/dmg-installer-launcher.sh
+          grep -Fq 'Progress UI ready before installation' scripts/dmg-installer-launcher.sh
+          grep -Fq 'AUTO_XRAY_PROGRESS_FILE="$PROGRESS_STATE"' scripts/dmg-installer-launcher.sh
+          grep -Fq 'progress_update 43 "Создание приложения…"' scripts/install-catalina.command
+          grep -Fq 'progress_update 100 "Готово"' scripts/install-catalina.command
+          grep -Fq '/usr/bin/python - "$1" "$2" "$3" "$4"' scripts/TEST_INSTALLER_UI.command
+          grep -Fq 'Installer app touched: no' scripts/TEST_INSTALLER_UI.command
+          grep -Fq 'Progress mode: determinate simulated stages' scripts/TEST_INSTALLER_UI.command
+          if grep -Fq 'Install AUTO Xray.app/Contents/Resources/installer-progress' scripts/TEST_INSTALLER_UI.command; then
+            echo 'Preflight must not execute a helper from the quarantined installer app bundle.' >&2
+            exit 1
+          fi
+          if grep -Fq 'Окно закроется автоматически' scripts/dmg-install-progress.m scripts/dmg-installer-launcher.sh scripts/TEST_INSTALLER_UI.command; then
+            echo 'Installer UI must not contain auto-close explanatory text.' >&2
+            exit 1
+          fi
+
+      - name: Guard responsive menu and quiet ZIP install
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'my runHelperAsync("ensure-proxy")' src/AUTO_Xray.applescript
+          grep -Fq 'return 15' src/AUTO_Xray.applescript
+          if grep -Fq 'AUTO Xray установлен и запущен.' scripts/install-catalina.command; then
+            echo 'ZIP installer must not show a success modal.' >&2
+            exit 1
+          fi
+
+      - name: Guard serialized runtime recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'LOCK_FILE = File.join(STATE, '\''supervisor.lock'\'')' src/auto-xray-supervisor.rb
+          grep -Fq 'with_runtime_lock(nonblocking: true)' src/auto-xray-supervisor.rb
+          grep -Fq 'cleanup_orphan_runtime' src/auto-xray-supervisor.rb
+          grep -Fq 'BUSY\n' src/auto-xray-supervisor.rb
+
+      - name: Guard resilient AUTO group switching
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "cfg['observatory']['enableConcurrency'] = true" src/auto-xray-supervisor.rb
+          grep -Fq 'def resilient_mode(args)' src/auto-xray-supervisor.rb
+          grep -Fq "with_runtime_lock { resilient_mode(args) }" src/auto-xray-supervisor.rb
+          grep -Fq 'foreground mode rollback succeeded' src/auto-xray-supervisor.rb
+
+      - name: Guard executable diagnostic packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/package-installer.yml
+          grep -Fq 'RUN_AUTO_XRAY_INSTALL_TEST.command' .github/workflows/package-installer.yml
+          grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'Diagnostics/RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'Diagnostics/TEST_INSTALLER_UI.command' .github/workflows/release-draft.yml
+          grep -Fq 'Process.clock_gettime(Process::CLOCK_MONOTONIC)' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'FIRST_LAUNCH' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'RUNTIME_TEST_START' RUN_AUTO_XRAY_INSTALL_TEST.command
+
+      - name: Validate Xray metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^Xray 1\.8\.4' vendor/xray/XRAY_VERSION.txt
+          grep -Eq '^[0-9a-f]{64}  xray$' vendor/xray/XRAY_SHA256.txt
+
+      - name: Scan tracked text for private runtime markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIE --exclude-dir=.git --exclude='ci.yml' \
+            '(subscription_url\.txt.*https?://|/Users/imac/|55cc8ea1-17bf-48e2-ba8b-8864eff63d05|7b7dec75|70c2)' .; then
+            echo 'Potential private/runtime data found in tracked files.' >&2
+            exit 1
+          fi
