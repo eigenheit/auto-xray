@@ -47,22 +47,20 @@ jobs:
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
           grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
-      - name: Compile native Catalina installer progress UI
+      - name: Validate Gatekeeper-safe Catalina installer progress UI
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/xcrun clang \
-            -arch x86_64 \
-            -mmacosx-version-min=10.15 \
-            -fobjc-arc \
-            -framework Cocoa \
-            scripts/dmg-install-progress.m \
-            -o /tmp/AUTO_Xray_installer_progress
-          test -x /tmp/AUTO_Xray_installer_progress
-          /usr/bin/file /tmp/AUTO_Xray_installer_progress | grep -Fq 'x86_64'
-          grep -Fq 'installer-progress' scripts/dmg-installer-launcher.sh
-          grep -Fq 'TEST_INSTALLER_UI.command' .github/workflows/release-draft.yml
-          grep -Fq 'Этот тест ничего не устанавливает.' scripts/TEST_INSTALLER_UI.command
+          grep -Fq '/usr/bin/python - "$1" "$2"' scripts/TEST_INSTALLER_UI.command
+          grep -Fq '/usr/bin/python - "$1" "$2"' scripts/dmg-installer-launcher.sh
+          grep -Fq 'from AppKit import *' scripts/TEST_INSTALLER_UI.command
+          grep -Fq 'from AppKit import *' scripts/dmg-installer-launcher.sh
+          grep -Fq 'Installer app touched: no' scripts/TEST_INSTALLER_UI.command
+          grep -Fq 'Этот тест НЕ запускает и НЕ открывает Install AUTO Xray.app.' scripts/TEST_INSTALLER_UI.command
+          if grep -Fq 'Install AUTO Xray.app/Contents/Resources/installer-progress' scripts/TEST_INSTALLER_UI.command; then
+            echo 'Preflight must not execute a helper from the quarantined installer app bundle.' >&2
+            exit 1
+          fi
 
       - name: Guard responsive menu and quiet ZIP install
         shell: bash
