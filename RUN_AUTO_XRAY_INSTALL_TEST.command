@@ -88,7 +88,7 @@ capture_proxy_state() {
 }
 
 monitor_loop() {
-  local prev cur tmp now install_started app_present helper_present xray_present launch_seen base_mtime
+  local prev cur tmp now install_started app_present helper_present xray_present launch_seen base_mtime bundle_changed current_mtime
   prev="${TMPDIR:-/tmp}/auto-xray-install-prev-${UID:-0}-$$.txt"
   cur="${TMPDIR:-/tmp}/auto-xray-install-cur-${UID:-0}-$$.txt"
   tmp="${TMPDIR:-/tmp}/auto-xray-install-diff-${UID:-0}-$$.txt"
@@ -104,6 +104,7 @@ monitor_loop() {
   helper_present=0
   xray_present=0
   launch_seen=0
+  bundle_changed=0
   [ -d "$APP_DIR" ] && app_present=1
   [ -f "$HELPER" ] && helper_present=1
   [ -x "$RES/xray" ] && xray_present=1
@@ -132,6 +133,7 @@ monitor_loop() {
         /usr/bin/printf '%s\tINSTALL_START\tinstaller process detected\n' "$(elapsed_ms)" >> "$TIMELINE"
       elif [ "$(app_mtime)" != "$base_mtime" ]; then
         install_started=1
+        bundle_changed=1
         /usr/bin/touch "$INSTALL_SEEN"
         /usr/bin/printf '%s\tINSTALL_START\tapplication bundle changed\n' "$(elapsed_ms)" >> "$TIMELINE"
       fi
@@ -140,10 +142,18 @@ monitor_loop() {
     if [ "$install_started" -eq 1 ]; then
       if [ "$app_present" -eq 1 ] && [ ! -d "$APP_DIR" ]; then
         app_present=0
+        bundle_changed=1
         /usr/bin/printf '%s\tAPP_REMOVED\tprevious application bundle removed\n' "$(elapsed_ms)" >> "$TIMELINE"
       elif [ "$app_present" -eq 0 ] && [ -d "$APP_DIR" ]; then
         app_present=1
+        bundle_changed=1
         /usr/bin/printf '%s\tAPP_CREATED\tapplication bundle appeared\n' "$(elapsed_ms)" >> "$TIMELINE"
+      fi
+
+      current_mtime="$(app_mtime)"
+      if [ "$bundle_changed" -eq 0 ] && [ "$current_mtime" != "$base_mtime" ]; then
+        bundle_changed=1
+        /usr/bin/printf '%s\tAPP_UPDATED\tapplication bundle modification time changed\n' "$(elapsed_ms)" >> "$TIMELINE"
       fi
 
       if [ "$helper_present" -eq 0 ] && [ -f "$HELPER" ]; then
@@ -155,9 +165,13 @@ monitor_loop() {
         /usr/bin/printf '%s\tXRAY_READY\txray executable present\n' "$(elapsed_ms)" >> "$TIMELINE"
       fi
 
-      if [ "$launch_seen" -eq 0 ] && /usr/bin/grep -q 'AUTO Xray\.app/Contents/MacOS' "$cur" 2>/dev/null; then
+      # Do not mistake an already-running previous version for the first launch
+      # of the newly installed build. A launch is valid only after the app bundle
+      # has been removed/recreated or otherwise changed by the installer.
+      if [ "$launch_seen" -eq 0 ] && [ "$bundle_changed" -eq 1 ] && \
+         /usr/bin/grep -q 'AUTO Xray\.app/Contents/MacOS' "$cur" 2>/dev/null; then
         launch_seen=1
-        /usr/bin/printf '%s\tFIRST_LAUNCH\tAUTO Xray process detected\n' "$(elapsed_ms)" >> "$TIMELINE"
+        /usr/bin/printf '%s\tFIRST_LAUNCH\tAUTO Xray process detected after bundle change\n' "$(elapsed_ms)" >> "$TIMELINE"
         /usr/bin/touch "$FIRST_LAUNCH_SEEN"
       fi
     fi
