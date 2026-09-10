@@ -151,21 +151,22 @@ jobs:
 
           ## Что изменилось
 
-          - AUTO-переключение RF/EU/World теперь проходит через supervisor recovery; если один узел группы недоступен, observatory проверяет кандидатов параллельно и может выбрать рабочий узел;
-          - сохранена защита от одновременных watchdog/user runtime-действий и коллизий портов 2081/9001;
-          - DMG показывает небольшое окно с индикатором во время установки и закрывает его автоматически по завершении;
-          - диагностический RUN_AUTO_XRAY_TESTS.command поставляется с корректным executable bit в DMG/ZIP, поэтому скачивать raw-файл и делать chmod вручную не требуется;
-          - успешная установка и обычные ON/OFF действия остаются без лишних модальных окон; ошибки показываются явно;
-          - DMG остается основным способом установки, ZIP — резервным.
+          - сохранено устойчивое AUTO-переключение RF/EU/World через supervisor recovery из 2.5.10;
+          - JXA-индикатор установки заменён на небольшой нативный Cocoa helper, собранный специально для Intel x86_64 с minimum macOS 10.15;
+          - в DMG добавлен отдельный TEST_INSTALLER_UI.command: он до установки запускает тот же самый progress helper примерно на 6 секунд и ничего не меняет в системе;
+          - индикатор фактической установки использует тот же бинарник и удерживается на экране достаточно долго, чтобы не исчезнуть незаметно при быстром обновлении;
+          - RUN_AUTO_XRAY_TESTS.command остаётся в папке Diagnostics для runtime-проверки после установки;
+          - сетевые параметры VLESS/Reality, группы RF/EU/World, proxy-порты и Xray-core не менялись.
 
-          ## Установка через DMG
+          ## Проверка и установка через DMG
 
-          1. Скачайте \`AUTO_Xray_Catalina_v${VERSION}.dmg\`.
-          2. Откройте DMG.
-          3. Запустите **Install AUTO Xray.app**.
-          4. Если Catalina показывает предупреждение о непроверенном разработчике: **Control + клик → Open / Открыть**. Иногда после первой блокировки Catalina разрешает запуск при повторном Control + клик → Open.
-          5. Во время установки отображается индикатор. Он закрывается автоматически после завершения.
+          1. Скачайте \`AUTO_Xray_Catalina_v${VERSION}.dmg\` и откройте его.
+          2. Сначала откройте папку **Diagnostics** и запустите **TEST_INSTALLER_UI.command**. Тест ничего не устанавливает; примерно 6 секунд должно быть видно окно «Установка AUTO Xray…».
+          3. После теста запустите **Install AUTO Xray.app**.
+          4. Если Catalina блокирует запуск: используйте **Control + клик → Open / Открыть**. Gatekeeper глобально отключать не нужно.
+          5. Во время реальной установки должно появиться то же окно индикатора и закрыться автоматически.
           6. После установки нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
+          7. Для полной runtime-проверки запустите **Diagnostics/RUN_AUTO_XRAY_TESTS.command** и сохраните созданный архив отчёта.
 
           После установки AUTO Xray стартует в состоянии **OFF**: обычный интернет должен работать напрямую.
 
@@ -247,30 +248,49 @@ jobs:
           PAYLOAD=".release/unpacked/AUTO_Xray_Catalina_Installer_v${VERSION}"
           ROOT=".release/dmg-root"
           APP="$ROOT/Install AUTO Xray.app"
+          PROGRESS_BIN=".release/installer-progress"
 
           rm -rf "$ROOT"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/Diagnostics"
+
+          /usr/bin/xcrun clang \
+            -arch x86_64 \
+            -mmacosx-version-min=10.15 \
+            -fobjc-arc \
+            -framework Cocoa \
+            scripts/dmg-install-progress.m \
+            -o "$PROGRESS_BIN"
+          chmod +x "$PROGRESS_BIN"
+          /usr/bin/file "$PROGRESS_BIN" | grep -Fq 'x86_64'
+
           cp scripts/dmg-installer-launcher.sh "$APP/Contents/MacOS/installer"
           chmod +x "$APP/Contents/MacOS/installer"
-          cp scripts/dmg-install-progress.js "$APP/Contents/Resources/dmg-install-progress.js"
+          cp "$PROGRESS_BIN" "$APP/Contents/Resources/installer-progress"
+          chmod +x "$APP/Contents/Resources/installer-progress"
           cp "$PAYLOAD/assets/Dove.icns" "$APP/Contents/Resources/Dove.icns"
           /usr/bin/ditto "$PAYLOAD" "$APP/Contents/Resources/payload"
 
+          cp scripts/TEST_INSTALLER_UI.command "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
           cp "$PAYLOAD/RUN_AUTO_XRAY_TESTS.command" "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
-          chmod +x "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          chmod +x "$ROOT/Diagnostics/TEST_INSTALLER_UI.command" \
+                   "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
           cat > "$ROOT/Diagnostics/README.txt" <<EOF
           Диагностика AUTO Xray ${VERSION}
           ================================
 
-          После установки и обновления подписки запустите
-          RUN_AUTO_XRAY_TESTS.command, если нужно проверить текущую версию.
+          ДО УСТАНОВКИ:
+          1. Запустите TEST_INSTALLER_UI.command.
+          2. Примерно 6 секунд должно быть видно окно «Установка AUTO Xray…».
+          3. Тест ничего не устанавливает и не меняет системный proxy.
+          4. На Desktop будет создан AUTO_Xray_Installer_UI_Test_*.txt.
 
-          Файл уже имеет право на выполнение. Если Catalina блокирует первый
-          запуск, используйте Control + клик → Open / Открыть. Gatekeeper
-          глобально отключать не нужно.
+          ПОСЛЕ УСТАНОВКИ И ОБНОВЛЕНИЯ ПОДПИСКИ:
+          Запустите RUN_AUTO_XRAY_TESTS.command для полной runtime-проверки.
+
+          Оба command-файла уже имеют право на выполнение. Если Catalina
+          блокирует первый запуск, используйте Control + клик → Open / Открыть.
+          Gatekeeper глобально отключать не нужно.
           EOF
-
-          /usr/bin/osacompile -l JavaScript -o /tmp/AUTO_Xray_install_progress.scpt scripts/dmg-install-progress.js
 
           cat > "$APP/Contents/Info.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -293,26 +313,35 @@ jobs:
 
           /usr/bin/plutil -lint "$APP/Contents/Info.plist"
           /bin/bash -n "$APP/Contents/MacOS/installer"
+          /bin/bash -n "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
           /usr/bin/codesign --force --deep --sign - "$APP"
           /usr/bin/codesign --verify --deep --strict "$APP"
 
           EXPECTED="$(head -n 1 "$PAYLOAD/vendor/xray/XRAY_SHA256.txt" | cut -c 1-64)"
           ACTUAL="$(shasum -a 256 "$APP/Contents/Resources/payload/vendor/xray/xray" | cut -c 1-64)"
           test "$ACTUAL" = "$EXPECTED"
+          test -x "$APP/Contents/Resources/installer-progress"
+          test -x "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
 
           cat > "$ROOT/README.txt" <<EOF
           AUTO Xray ${VERSION} — macOS Catalina / Intel
           ==============================================
 
+          ПЕРЕД УСТАНОВКОЙ рекомендуется открыть папку Diagnostics и запустить
+          TEST_INSTALLER_UI.command. Он примерно на 6 секунд показывает тот же
+          индикатор, который используется установщиком, и ничего не устанавливает.
+
+          После успешного UI-теста:
           1. Откройте Install AUTO Xray.app.
           2. Если Catalina блокирует запуск: Control + клик → Open / Открыть.
-          3. Во время установки появится индикатор; он закроется автоматически.
+          3. Во время установки должно появиться то же окно индикатора.
           4. После установки голубь появится в строке меню и в Launchpad.
 
           AUTO Xray запускается в состоянии OFF, поэтому обычный интернет
           должен продолжить работать напрямую до нажатия «Включить».
 
-          Для диагностического теста после установки используйте папку Diagnostics.
+          После установки и обновления подписки для полной проверки используйте
+          Diagnostics/RUN_AUTO_XRAY_TESTS.command.
 
           Этот релиз не подписан Apple Developer ID и не notarized.
           Не отключайте Gatekeeper глобально.
