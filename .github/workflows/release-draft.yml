@@ -86,6 +86,7 @@ jobs:
           cp VERSION "$PKG/VERSION"
           cp THIRD_PARTY_NOTICES.txt "$PKG/THIRD_PARTY_NOTICES.txt"
           cp RUN_AUTO_XRAY_TESTS.command "$PKG/RUN_AUTO_XRAY_TESTS.command"
+          cp RUN_AUTO_XRAY_INSTALL_TEST.command "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command"
           cp src/AUTO_Xray.applescript "$PKG/src/AUTO_Xray.applescript"
           sed -i -E "s/2\\.5\\.[0-9]+/${VERSION}/g" "$PKG/src/AUTO_Xray.applescript"
           cp src/auto-xray-helper.rb "$PKG/src/auto-xray-helper.rb"
@@ -114,15 +115,19 @@ jobs:
           Основной способ установки этой версии — DMG из GitHub Releases.
           Этот ZIP оставлен как резервный вариант.
 
+          Для полного замера установки:
+          1. Сначала запустите RUN_AUTO_XRAY_INSTALL_TEST.command и оставьте Terminal открытым.
+          2. Затем запустите INSTALL_AUTO_XRAY_CATALINA.command.
+          3. Монитор автоматически зафиксирует установку и первый запуск с таймингами.
+          4. После первого запуска он предложит начать RUN_AUTO_XRAY_TESTS.command.
+
+          Обычная установка без диагностики:
           1. Запустите INSTALL_AUTO_XRAY_CATALINA.command.
           2. Если macOS блокирует запуск: Control + клик → Open / Открыть.
           3. Нажмите 🕊 → Обновить подписку → вставьте HTTPS-ссылку.
           4. Выберите RF / EU / World → Включить.
 
-          Для диагностики после установки можно запустить
-          RUN_AUTO_XRAY_TESTS.command. В ZIP сохранено право на выполнение,
-          поэтому отдельный chmod обычно не требуется.
-
+          Диагностические command-файлы имеют право на выполнение.
           Telegram: Use system proxy settings.
 
           Не отключайте Gatekeeper глобально.
@@ -131,6 +136,7 @@ jobs:
 
           chmod +x "$PKG/INSTALL_AUTO_XRAY_CATALINA.command" \
                    "$PKG/RUN_AUTO_XRAY_TESTS.command" \
+                   "$PKG/RUN_AUTO_XRAY_INSTALL_TEST.command" \
                    "$PKG/scripts/install-catalina.command" \
                    "$PKG/UNINSTALL_AUTO_XRAY.command" \
                    "$PKG/vendor/xray/xray"
@@ -157,18 +163,18 @@ jobs:
           - индикатор теперь определённый (0–100%) и меняется по реальным этапам установки: проверка, подготовка, создание приложения, копирование компонентов, настройка, bootstrap и запуск;
           - удалён лишний текст «Окно закроется автоматически»;
           - TEST_INSTALLER_UI.command остаётся Gatekeeper-safe: до установки он не запускает Install AUTO Xray.app, а системным Python/PyObjC показывает движущуюся имитацию того же интерфейса;
+          - RUN_AUTO_XRAY_INSTALL_TEST.command запускается до установки, фиксирует install/first-launch timeline и затем предлагает полный runtime-тест;
           - RUN_AUTO_XRAY_TESTS.command остаётся в папке Diagnostics для runtime-проверки после установки;
           - сетевые параметры VLESS/Reality, группы RF/EU/World, proxy-порты и Xray-core не менялись.
 
           ## Проверка и установка через DMG
 
           1. Скачайте \`AUTO_Xray_Catalina_v${VERSION}.dmg\` и откройте его.
-          2. Сначала откройте папку **Diagnostics** и запустите **TEST_INSTALLER_UI.command**. Тест ничего не устанавливает; после появления окна полоса должна заметно пройти несколько этапов до 100%.
-          3. После теста запустите **Install AUTO Xray.app**.
+          2. Для полного замера откройте **Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command** и оставьте Terminal открытым.
+          3. Затем запустите **Install AUTO Xray.app** обычным способом.
           4. Если Catalina блокирует запуск: используйте **Control + клик → Open / Открыть**. Gatekeeper глобально отключать не нужно.
-          5. Во время реальной установки окно индикатора должно появиться до начала установочных операций, а полоса и подпись — изменяться по ходу работы.
-          6. После установки нажмите 🕊 → **Обновить подписку** → вставьте HTTPS-ссылку → выберите RF/EU/World → **Включить**.
-          7. Для полной runtime-проверки запустите **Diagnostics/RUN_AUTO_XRAY_TESTS.command** и сохраните созданный архив отчёта.
+          5. Монитор зафиксирует установку, первый запуск и время первого menu-state, после чего предложит запустить **RUN_AUTO_XRAY_TESTS.command**.
+          6. Отдельно можно запустить **Diagnostics/TEST_INSTALLER_UI.command**, если нужно проверить только движение индикатора без установки.
 
           После установки AUTO Xray стартует в состоянии **OFF**: обычный интернет должен работать напрямую.
 
@@ -237,6 +243,7 @@ jobs:
           test -f "$PAYLOAD/assets/Dove.icns"
           test -x "$PAYLOAD/vendor/xray/xray"
           test -x "$PAYLOAD/RUN_AUTO_XRAY_TESTS.command"
+          test -x "$PAYLOAD/RUN_AUTO_XRAY_INSTALL_TEST.command"
 
           EXPECTED="$(head -n 1 "$PAYLOAD/vendor/xray/XRAY_SHA256.txt" | cut -c 1-64)"
           ACTUAL="$(shasum -a 256 "$PAYLOAD/vendor/xray/xray" | cut -c 1-64)"
@@ -274,22 +281,24 @@ jobs:
 
           cp scripts/TEST_INSTALLER_UI.command "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
           cp "$PAYLOAD/RUN_AUTO_XRAY_TESTS.command" "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          cp "$PAYLOAD/RUN_AUTO_XRAY_INSTALL_TEST.command" "$ROOT/Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command"
           chmod +x "$ROOT/Diagnostics/TEST_INSTALLER_UI.command" \
-                   "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+                   "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command" \
+                   "$ROOT/Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command"
           cat > "$ROOT/Diagnostics/README.txt" <<EOF
           Диагностика AUTO Xray ${VERSION}
           ================================
 
-          ДО УСТАНОВКИ:
-          1. Запустите TEST_INSTALLER_UI.command.
-          2. После появления окна полоса должна заметно пройти несколько этапов до 100%.
-          3. Тест ничего не устанавливает, не запускает installer app и не меняет системный proxy.
-          4. На Desktop будет создан AUTO_Xray_Installer_UI_Test_*.txt.
+          ПОЛНЫЙ ТЕСТ УСТАНОВКИ:
+          1. Сначала запустите RUN_AUTO_XRAY_INSTALL_TEST.command и оставьте Terminal открытым.
+          2. Затем обычным способом запустите Install AUTO Xray.app.
+          3. Монитор зафиксирует процессы установки, первый запуск и времена событий.
+          4. После первого запуска он предложит начать RUN_AUTO_XRAY_TESTS.command.
 
-          ПОСЛЕ УСТАНОВКИ И ОБНОВЛЕНИЯ ПОДПИСКИ:
-          Запустите RUN_AUTO_XRAY_TESTS.command для полной runtime-проверки.
+          ОТДЕЛЬНЫЙ UI-PREFLIGHT:
+          TEST_INSTALLER_UI.command только проверяет движение индикатора и ничего не устанавливает.
 
-          Оба command-файла уже имеют право на выполнение. Если Catalina
+          Все command-файлы имеют право на выполнение. Если Catalina
           блокирует первый запуск, используйте Control + клик → Open / Открыть.
           Gatekeeper глобально отключать не нужно.
           EOF
@@ -316,6 +325,8 @@ jobs:
           /usr/bin/plutil -lint "$APP/Contents/Info.plist"
           /bin/bash -n "$APP/Contents/MacOS/installer"
           /bin/bash -n "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
+          /bin/bash -n "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          /bin/bash -n "$ROOT/Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command"
           /usr/bin/codesign --force --deep --sign - "$APP"
           /usr/bin/codesign --verify --deep --strict "$APP"
 
@@ -324,16 +335,22 @@ jobs:
           test "$ACTUAL" = "$EXPECTED"
           test -x "$APP/Contents/Resources/installer-progress"
           test -x "$ROOT/Diagnostics/TEST_INSTALLER_UI.command"
+          test -x "$ROOT/Diagnostics/RUN_AUTO_XRAY_TESTS.command"
+          test -x "$ROOT/Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command"
 
           cat > "$ROOT/README.txt" <<EOF
           AUTO Xray ${VERSION} — macOS Catalina / Intel
           ==============================================
 
-          ПЕРЕД УСТАНОВКОЙ рекомендуется открыть папку Diagnostics и запустить
-          TEST_INSTALLER_UI.command. После появления окна полоса должна пройти
-          несколько этапов до 100%; тест ничего не устанавливает.
+          Для полного теста установки откройте папку Diagnostics и сначала
+          запустите RUN_AUTO_XRAY_INSTALL_TEST.command. Оставьте Terminal открытым,
+          затем запустите Install AUTO Xray.app. Монитор зафиксирует установку,
+          первый запуск и время отклика, после чего предложит runtime-тест.
 
-          После успешного UI-теста:
+          TEST_INSTALLER_UI.command остаётся отдельным безопасным preflight-тестом
+          индикатора и ничего не устанавливает.
+
+          При обычной установке без диагностики:
           1. Откройте Install AUTO Xray.app.
           2. Если Catalina блокирует запуск: Control + клик → Open / Открыть.
           3. Окно индикатора должно появиться до начала установочных операций,
@@ -342,9 +359,6 @@ jobs:
 
           AUTO Xray запускается в состоянии OFF, поэтому обычный интернет
           должен продолжить работать напрямую до нажатия «Включить».
-
-          После установки и обновления подписки для полной проверки используйте
-          Diagnostics/RUN_AUTO_XRAY_TESTS.command.
 
           Этот релиз не подписан Apple Developer ID и не notarized.
           Не отключайте Gatekeeper глобально.

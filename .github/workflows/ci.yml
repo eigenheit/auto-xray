@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in scripts/*.command scripts/*.sh RUN_AUTO_XRAY_TESTS.command; do
+          for f in scripts/*.command scripts/*.sh RUN_AUTO_XRAY_TESTS.command RUN_AUTO_XRAY_INSTALL_TEST.command; do
             [ -e "$f" ] || continue
             echo "Checking $f"
             /bin/bash -n "$f"
@@ -112,9 +112,16 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/package-installer.yml
+          grep -Fq 'RUN_AUTO_XRAY_INSTALL_TEST.command' .github/workflows/package-installer.yml
           grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'RUN_AUTO_XRAY_INSTALL_TEST.command' .github/workflows/release-draft.yml
           grep -Fq 'Diagnostics/RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'Diagnostics/RUN_AUTO_XRAY_INSTALL_TEST.command' .github/workflows/release-draft.yml
           grep -Fq 'Diagnostics/TEST_INSTALLER_UI.command' .github/workflows/release-draft.yml
+          grep -Fq 'Process.clock_gettime(Process::CLOCK_MONOTONIC)' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'bundle_changed' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'FIRST_LAUNCH' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'RUNTIME_TEST_START' RUN_AUTO_XRAY_INSTALL_TEST.command
 
       - name: Validate Xray metadata
         shell: bash
