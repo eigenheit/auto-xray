@@ -1,0 +1,11 @@
+diff --git a/src/auto-xray-helper.rb b/src/auto-xray-helper.rb
+--- a/src/auto-xray-helper.rb
++++ b/src/auto-xray-helper.rb
+@@ -707,6 +707,7 @@ def start_core(mode)
+       sleep 0.1
+     end
+     Process.kill('KILL', pid) rescue nil if process_alive?(pid)
++    Process.wait(pid) rescue nil
+     log.close
+     raise "Proxy probe failed: #{out.strip}"
+   end
