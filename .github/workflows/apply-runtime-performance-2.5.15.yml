@@ -1,0 +1,45 @@
+name: Apply runtime performance 2.5.15
+
+on:
+  push:
+    branches: [fix/runtime-performance-2.5.15]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/runtime-performance-2.5.15
+
+      - name: Apply and validate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .runtime-performance-2.5.15.patch
+          git apply --check .runtime-performance-2.5.15.patch
+          git apply .runtime-performance-2.5.15.patch
+          rm .runtime-performance-2.5.15.patch
+          rm .github/workflows/apply-runtime-performance-2.5.15.yml
+          ruby -c src/auto-xray-helper.rb
+          ruby -c src/auto-xray-supervisor.rb
+          /bin/bash -n RUN_AUTO_XRAY_TESTS.command
+          test "$(tr -d '[:space:]' < VERSION)" = "2.5.15"
+          grep -Fq "STARTUP_PROBE_TIMEOUT = 5" src/auto-xray-helper.rb
+          grep -Fq "'enableConcurrency' => true" src/auto-xray-helper.rb
+          grep -Fq 'TIMINGS_OUT=' RUN_AUTO_XRAY_TESTS.command
+
+      - name: Commit actual 2.5.15 changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Speed up foreground runtime actions for 2.5.15"
+          git push origin HEAD:fix/runtime-performance-2.5.15
