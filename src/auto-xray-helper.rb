@@ -11,7 +11,8 @@ require 'timeout'
 
 HTTP_PORT = 9001
 SOCKS_PORT = 2081
-PROBE_URL = 'https://www.gstatic.com/generate_204'
+PROBE_URL = 'http://cp.cloudflare.com/generate_204'
+STARTUP_PROBE_TIMEOUT = 5
 
 WARNING_MARKERS = [
   'ключ не поддерживается', 'новый ключ', 'обратитесь в поддержку',
@@ -649,7 +650,7 @@ def build_config(mode)
     selected = nodes.select { |n| n['group'] == group }
     raise "No nodes in group #{group}" if selected.empty?
     prefix = "ax-#{group.downcase}-"
-    cfg['observatory'] = { 'subjectSelector' => [prefix], 'probeURL' => PROBE_URL, 'probeInterval' => '15s' }
+    cfg['observatory'] = { 'subjectSelector' => [prefix], 'probeURL' => PROBE_URL, 'probeInterval' => '15s', 'enableConcurrency' => true }
     cfg['routing'] = {
       'domainStrategy' => 'AsIs',
       'balancers' => [{ 'tag' => 'auto-balance', 'selector' => [prefix], 'strategy' => { 'type' => 'leastPing' } }],
@@ -674,7 +675,12 @@ def validate_config
 end
 
 def probe
-  run_cmd(['/usr/bin/curl', '--silent', '--show-error', '--max-time', '15', '--socks5-hostname', "127.0.0.1:#{SOCKS_PORT}", '-o', '/dev/null', '-w', '%{http_code} %{time_total}', PROBE_URL], 20)
+  run_cmd([
+    '/usr/bin/curl', '--silent', '--show-error',
+    '--connect-timeout', '3', '--max-time', STARTUP_PROBE_TIMEOUT.to_s,
+    '--socks5-hostname', "127.0.0.1:#{SOCKS_PORT}",
+    '-o', '/dev/null', '-w', '%{http_code} %{time_total}', PROBE_URL
+  ], STARTUP_PROBE_TIMEOUT + 2)
 end
 
 def start_core(mode)
@@ -686,14 +692,22 @@ def start_core(mode)
   log.puts("\n\n=== START #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ===")
   log.flush
   pid = Process.spawn(xray, 'run', '-config', P[:runtime_config], out: log, err: log, pgroup: true)
-  sleep 2
+  # AUTO groups need a short head start for concurrent observatory probes.
+  # Manual nodes do not. This avoids the old 15-second first-probe stall while
+  # preserving an end-to-end connectivity check before system proxies are enabled.
+  sleep(mode['type'] == 'manual' ? 1.0 : 2.5)
   unless process_alive?(pid)
     log.close
     raise 'Xray stopped immediately'
   end
   rc, out = probe
-  unless rc.zero? && out.strip.start_with?('204 ')
+  unless rc.zero? && (out.strip.start_with?('204 ') || out.strip.start_with?('200 '))
     Process.kill('TERM', pid) rescue nil
+    12.times do
+      break unless process_alive?(pid)
+      sleep 0.1
+    end
+    Process.kill('KILL', pid) rescue nil if process_alive?(pid)
     log.close
     raise "Proxy probe failed: #{out.strip}"
   end

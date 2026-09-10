@@ -88,13 +88,13 @@ def probe(index = 0)
   run_cmd([
     '/usr/bin/curl',
     '--silent', '--show-error',
-    '--connect-timeout', '4',
-    '--max-time', '6',
+    '--connect-timeout', '3',
+    '--max-time', '5',
     '--socks5-hostname', "127.0.0.1:#{SOCKS_PORT}",
     '-o', '/dev/null',
     '-w', '%{http_code} %{time_total}',
     url
-  ], 8)
+  ], 7)
 end
 
 def probe_ok?(rc, out)
@@ -249,6 +249,9 @@ def fallback_start
   patch_runtime_probe
   last_error = ''
 
+  cfg = JSON.parse(File.read(RUNTIME_CONFIG, encoding: 'UTF-8')) rescue {}
+  auto_group = cfg['observatory'].is_a?(Hash)
+
   2.times do |attempt|
     cleanup_orphan_runtime
 
@@ -257,22 +260,22 @@ def fallback_start
     f.flush
 
     pid = Process.spawn(XRAY, 'run', '-config', RUNTIME_CONFIG, out: f, err: f, pgroup: true)
-    # Give concurrent observatory probes a brief head start before testing the
-    # local SOCKS endpoint. Manual configurations have no observatory and do not
-    # need the extra warm-up.
-    cfg = JSON.parse(File.read(RUNTIME_CONFIG, encoding: 'UTF-8')) rescue {}
-    sleep(cfg['observatory'].is_a?(Hash) ? 3 : 1)
+    sleep(auto_group ? 2.5 : 0.75)
 
     unless process_alive?(pid)
       last_error = 'Xray stopped immediately'
       f.close
       cleanup_orphan_runtime
-      sleep 1
+      sleep 0.5
       next
     end
 
+    # A live process with a remote connectivity failure is not helped by
+    # restarting Xray for another minute. Give the concurrent AUTO balancer a
+    # short settling budget; manual nodes get two quick probes, then fail fast.
     ok = false
-    6.times do |i|
+    probe_count = auto_group ? 3 : 2
+    probe_count.times do |i|
       rc, out = probe(i)
       if probe_ok?(rc, out)
         ok = true
@@ -280,7 +283,7 @@ def fallback_start
         break
       end
       last_error = out.to_s.strip
-      sleep 2 if i < 5
+      sleep 0.75 if i < probe_count - 1
     end
 
     if ok
@@ -300,18 +303,19 @@ def fallback_start
     f.close
     stop_pid(pid)
     cleanup_orphan_runtime
-    sleep 1
+    # Reserve the second process attempt for an immediate local Xray exit.
+    # A live process whose remote probes failed has already established the
+    # network failure and should return control to the user promptly.
+    break
   end
 
   raise "proxy probe failed after automatic retry: #{last_error}"
 end
 
 def resilient_start
-  # A failed restore during a Wi-Fi outage can leave AUTO Xray's localhost
-  # proxy endpoints enabled while the core is already stopped. Clear those
-  # endpoints before the core helper snapshots the previous proxy state.
-  disable_stale_auto_proxies
-
+  # Happy-path ON must not pay for a full scan of every network service. The
+  # core helper already restores AUTO Xray's saved proxy state when necessary;
+  # broad stale-proxy cleanup remains on actual recovery/failure paths.
   rc, out, err = helper(['start'])
   return [rc, out, err] if rc.zero?
 
@@ -365,9 +369,17 @@ def resilient_mode(args)
   # Switch while OFF so the core helper only stores the requested mode. The
   # supervisor then owns startup/retry semantics and can recover AUTO groups
   # when one candidate node is unavailable.
-  helper(['stop'])
-  cleanup_orphan_runtime
-  disable_stale_auto_proxies
+  src0, sout0, serr0 = helper(['stop'])
+  unless src0.zero?
+    cleanup_orphan_runtime
+    disable_stale_auto_proxies
+    return [src0, sout0, serr0]
+  end
+  # Normal mode changes should not run the expensive recovery scan. Keep the
+  # orphan safeguard only when a listener actually survived the stop.
+  if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
+    cleanup_orphan_runtime
+  end
 
   mrc, mout, merr = helper(['mode'] + args)
   unless mrc.zero?
@@ -499,8 +511,16 @@ when 'stop'
   result = with_runtime_lock do
     File.delete(HEALTH_FILE) rescue nil
     rc, out, err = helper(['stop'] + args)
-    cleanup_orphan_runtime
-    disable_stale_auto_proxies
+    if rc.zero?
+      # Normal OFF is a fast path. The core helper has restored the saved proxy
+      # state; only invoke orphan cleanup if a listener is still present.
+      if !listener_pids(SOCKS_PORT).empty? || !listener_pids(HTTP_PORT).empty?
+        cleanup_orphan_runtime
+      end
+    else
+      cleanup_orphan_runtime
+      disable_stale_auto_proxies
+    end
     [rc, out, err]
   end
   print_helper_result(*result)

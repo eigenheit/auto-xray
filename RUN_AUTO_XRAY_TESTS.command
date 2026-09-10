@@ -11,6 +11,7 @@ REPORT="$OUT_DIR/self-test.log"
 RUNTIME_OUT="$OUT_DIR/runtime-during-test.log"
 STATUS_OUT="$OUT_DIR/final-status.txt"
 NODES_OUT="$OUT_DIR/nodes.txt"
+TIMINGS_OUT="$OUT_DIR/timings.txt"
 ARCHIVE="$OUT_DIR.zip"
 PASS=0
 WARN=0
@@ -20,9 +21,12 @@ ORIG_TYPE="auto"
 ORIG_VALUE="RF"
 AUTO_WORLD_OK=0
 WORLD_MANUAL_OK=0
+TIMED_MS=0
+TIMED_OUTPUT=""
 
 mkdir -p "$OUT_DIR"
 : > "$REPORT"
+: > "$TIMINGS_OUT"
 
 log() {
   /usr/bin/printf '%s\n' "$*" | /usr/bin/tee -a "$REPORT"
@@ -46,6 +50,57 @@ mark_fail() {
 run_helper() {
   /usr/bin/env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 AUTO_XRAY_RESOURCES="$RES" \
     /usr/bin/ruby -EUTF-8:UTF-8 "$HELPER" "$@"
+}
+
+monotonic_ms() {
+  /usr/bin/ruby -e 'puts((Process.clock_gettime(Process::CLOCK_MONOTONIC) * 1000).round)' 2>/dev/null
+}
+
+run_timed_helper() {
+  local label="$1" tmp start end rc
+  shift
+  tmp="${TMPDIR:-/tmp}/auto-xray-selftest-timed-${UID:-0}-$$.txt"
+  start="$(monotonic_ms)"
+  run_helper "$@" >"$tmp" 2>&1
+  rc=$?
+  end="$(monotonic_ms)"
+  TIMED_MS=$((end - start))
+  TIMED_OUTPUT="$(/bin/cat "$tmp" 2>/dev/null || true)"
+  /bin/rm -f "$tmp" >/dev/null 2>&1 || true
+  /usr/bin/printf '%s\t%d\t%s\n' "$label" "$TIMED_MS" "$rc" >> "$TIMINGS_OUT"
+  log "TIMING: $label = $TIMED_MS ms (rc=$rc)"
+  return "$rc"
+}
+
+check_fast_stop() {
+  local label="$1" ms="$2"
+  if [ "$ms" -le 4000 ]; then
+    mark_pass "$label: OFF за ${ms} ms."
+  else
+    mark_warn "$label: OFF занял ${ms} ms; целевой happy-path ≤ 4000 ms."
+  fi
+}
+
+check_fast_start() {
+  local label="$1" ms="$2"
+  if [ "$ms" -le 8000 ]; then
+    mark_pass "$label: ON за ${ms} ms."
+  else
+    mark_warn "$label: ON занял ${ms} ms; целевой happy-path ≤ 8000 ms (удалённый узел тоже может влиять)."
+  fi
+}
+
+record_menu_refresh_timing() {
+  local label="$1"
+  if run_timed_helper "${label}-menu-state" menu-state; then
+    if [ "$TIMED_MS" -gt 3000 ]; then
+      mark_warn "$label: обновление состояния меню заняло ${TIMED_MS} ms."
+    else
+      log "UI timing: $label menu-state = ${TIMED_MS} ms."
+    fi
+  else
+    mark_warn "$label: menu-state завершился ошибкой за ${TIMED_MS} ms."
+  fi
 }
 
 menu_state() {
@@ -140,6 +195,7 @@ finish() {
   log "SUMMARY: PASS=$PASS WARN=$WARN FAIL=$FAIL"
   log "AUTO Xray оставлен в состоянии OFF; исходный выбранный режим восстановлен."
   log "Логи: $OUT_DIR"
+  log "Тайминги: $TIMINGS_OUT"
 
   log "Архив для отправки: $ARCHIVE"
   (cd "$HOME/Desktop" && /usr/bin/zip -qry "$ARCHIVE" "$(/usr/bin/basename "$OUT_DIR")") >/dev/null 2>&1 || true
@@ -209,9 +265,13 @@ mark_pass "Подписка и список узлов доступны ($NODE_C
 run_helper menu-nodes > "$NODES_OUT" 2>&1 || true
 log ""
 log "=== 1. Baseline OFF ==="
-if run_helper stop >> "$REPORT" 2>&1; then
+if run_timed_helper "baseline-stop" stop; then
+  /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
   mark_pass "AUTO Xray остановлен перед тестом."
+  check_fast_stop "Baseline" "$TIMED_MS"
+  record_menu_refresh_timing "baseline-off"
 else
+  /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
   mark_warn "Команда stop вернула ошибку; продолжаю диагностику."
 fi
 DIRECT="$(probe_direct)"
@@ -230,9 +290,16 @@ try_auto_group() {
 
   log ""
   log "=== AUTO $group ==="
-  output="$(run_helper mode auto "$group" 2>&1)"
-  if [ $? -ne 0 ]; then
-    mark_warn "Переключение на AUTO $group не удалось: $output"
+  if run_timed_helper "mode-auto-$group" mode auto "$group"; then
+    output="$TIMED_OUTPUT"
+    if [ "$TIMED_MS" -gt 10000 ]; then
+      mark_warn "AUTO $group: переключение заняло ${TIMED_MS} ms; целевой happy-path ≤ 10000 ms."
+    else
+      mark_pass "AUTO $group: переключение за ${TIMED_MS} ms."
+    fi
+  else
+    output="$TIMED_OUTPUT"
+    mark_warn "Переключение на AUTO $group не удалось за ${TIMED_MS} ms: $output"
     return 1
   fi
 
@@ -270,11 +337,14 @@ else
   [ -n "$FIRST_GROUP" ] && run_helper mode auto "$FIRST_GROUP" >> "$REPORT" 2>&1 || true
 fi
 
-START_OUT="$(run_helper start 2>&1)"
-if [ $? -eq 0 ]; then
+if run_timed_helper "base-start" start; then
+  START_OUT="$TIMED_OUTPUT"
   mark_pass "AUTO Xray включился: $START_OUT"
+  check_fast_start "Базовый старт" "$TIMED_MS"
+  record_menu_refresh_timing "base-on"
 else
-  mark_warn "AUTO Xray не смог стартовать на базовой группе: $START_OUT"
+  START_OUT="$TIMED_OUTPUT"
+  mark_warn "AUTO Xray не смог стартовать на базовой группе за ${TIMED_MS} ms: $START_OUT"
 fi
 
 try_auto_group RF || true
@@ -290,9 +360,16 @@ else
   for node_id in $WORLD_IDS; do
     node_name="$(/usr/bin/awk -F'\t' -v id="$node_id" '$2 == id {print $3; exit}' "$NODES_OUT")"
     log "-- manual $node_id $node_name"
-    OUT="$(run_helper mode manual "$node_id" 2>&1)"
-    if [ $? -ne 0 ]; then
-      mark_warn "Manual $node_name не переключился: $OUT"
+    if run_timed_helper "mode-manual-$node_id" mode manual "$node_id"; then
+      OUT="$TIMED_OUTPUT"
+      if [ "$TIMED_MS" -gt 12000 ]; then
+        mark_warn "Manual $node_name: переключение заняло ${TIMED_MS} ms."
+      else
+        mark_pass "Manual $node_name: переключение за ${TIMED_MS} ms."
+      fi
+    else
+      OUT="$TIMED_OUTPUT"
+      mark_warn "Manual $node_name не переключился за ${TIMED_MS} ms: $OUT"
       continue
     fi
     SOCKS_OUT="$(probe_socks)"
@@ -347,17 +424,22 @@ log ""
 log "=== 5. Repeated ON/OFF ==="
 i=1
 while [ "$i" -le 3 ]; do
-  if run_helper stop >> "$REPORT" 2>&1; then
+  if run_timed_helper "cycle-$i-stop" stop; then
+    /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+    check_fast_stop "Cycle $i" "$TIMED_MS"
     if [ -n "$(listener_pids 2081)" ] || [ -n "$(listener_pids 9001)" ]; then
       mark_fail "Cycle $i: после OFF остался listener."
     else
       mark_pass "Cycle $i: OFF освободил localhost-порты."
     fi
   else
+    /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
     mark_fail "Cycle $i: stop завершился ошибкой."
   fi
 
-  if run_helper start >> "$REPORT" 2>&1; then
+  if run_timed_helper "cycle-$i-start" start; then
+    /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+    check_fast_start "Cycle $i" "$TIMED_MS"
     SOCKS_OUT="$(probe_socks)"
     if probe_ok "$SOCKS_OUT"; then
       mark_pass "Cycle $i: ON + SOCKS probe OK."
@@ -365,7 +447,8 @@ while [ "$i" -le 3 ]; do
       mark_warn "Cycle $i: ON, но SOCKS probe failed ($SOCKS_OUT)."
     fi
   else
-    mark_warn "Cycle $i: start завершился ошибкой."
+    /usr/bin/printf '%s\n' "$TIMED_OUTPUT" >> "$REPORT"
+    mark_warn "Cycle $i: start завершился ошибкой за ${TIMED_MS} ms."
   fi
   i=$((i + 1))
 done
