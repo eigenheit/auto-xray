@@ -126,13 +126,20 @@ jobs:
           grep -Fq 'FIRST_LAUNCH' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'APP_READY_OFF' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'READY_OFF_CONFIRMED' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'menu_state_is_off' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'auto_proxy_disabled' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'listeners_clear' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'RUNTIME_TEST_START' RUN_AUTO_XRAY_INSTALL_TEST.command
+          grep -Fq 'Runtime-отчёт добавлен внутрь общего архива.' RUN_AUTO_XRAY_INSTALL_TEST.command
           grep -Fq 'prepare_manual_baseline' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'WORKING_AUTO_GROUP' RUN_AUTO_XRAY_TESTS.command
           grep -Fq 'check_manual_switch_budget' RUN_AUTO_XRAY_TESTS.command
           if grep -Fq '/usr/bin/expr "$now" - "$START_MS"' RUN_AUTO_XRAY_INSTALL_TEST.command; then
             echo 'Install timing monitor must use shell arithmetic, not the missing Catalina /usr/bin/expr path.' >&2
+            exit 1
+          fi
+          if grep -Fq 'j["proxy"] == false' RUN_AUTO_XRAY_INSTALL_TEST.command; then
+            echo 'Install monitor must not depend on a proxy field that menu-state does not expose.' >&2
             exit 1
           fi
 
