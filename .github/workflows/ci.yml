@@ -47,6 +47,16 @@ jobs:
           grep -Fq "AUTO Xray ${VERSION}:" "$GENERATED"
           grep -Fq "Версия ${VERSION} · Catalina Intel" "$GENERATED"
 
+      - name: Compile DMG progress UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/AUTO_Xray_install_progress.scpt
+          /usr/bin/osacompile -l JavaScript -o /tmp/AUTO_Xray_install_progress.scpt scripts/dmg-install-progress.js
+          test -s /tmp/AUTO_Xray_install_progress.scpt
+          grep -Fq 'dmg-install-progress.js' scripts/dmg-installer-launcher.sh
+          grep -Fq 'PROGRESS_DONE' scripts/dmg-installer-launcher.sh
+
       - name: Guard responsive menu and quiet ZIP install
         shell: bash
         run: |
@@ -66,6 +76,23 @@ jobs:
           grep -Fq 'with_runtime_lock(nonblocking: true)' src/auto-xray-supervisor.rb
           grep -Fq 'cleanup_orphan_runtime' src/auto-xray-supervisor.rb
           grep -Fq 'BUSY\n' src/auto-xray-supervisor.rb
+
+      - name: Guard resilient AUTO group switching
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "cfg['observatory']['enableConcurrency'] = true" src/auto-xray-supervisor.rb
+          grep -Fq 'def resilient_mode(args)' src/auto-xray-supervisor.rb
+          grep -Fq "with_runtime_lock { resilient_mode(args) }" src/auto-xray-supervisor.rb
+          grep -Fq 'foreground mode rollback succeeded' src/auto-xray-supervisor.rb
+
+      - name: Guard executable diagnostic packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/package-installer.yml
+          grep -Fq 'RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
+          grep -Fq 'Diagnostics/RUN_AUTO_XRAY_TESTS.command' .github/workflows/release-draft.yml
 
       - name: Validate Xray metadata
         shell: bash

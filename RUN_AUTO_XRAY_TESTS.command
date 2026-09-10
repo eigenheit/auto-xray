@@ -18,6 +18,8 @@ FAIL=0
 RUNTIME_START=0
 ORIG_TYPE="auto"
 ORIG_VALUE="RF"
+AUTO_WORLD_OK=0
+WORLD_MANUAL_OK=0
 
 mkdir -p "$OUT_DIR"
 : > "$REPORT"
@@ -246,6 +248,7 @@ try_auto_group() {
   http="$(probe_http)"
   if probe_ok "$socks"; then
     mark_pass "AUTO $group: SOCKS probe OK ($socks)."
+    [ "$group" = "WORLD" ] && AUTO_WORLD_OK=1
   else
     mark_warn "AUTO $group: SOCKS probe failed ($socks)."
   fi
@@ -294,11 +297,18 @@ else
     fi
     SOCKS_OUT="$(probe_socks)"
     if probe_ok "$SOCKS_OUT"; then
+      WORLD_MANUAL_OK=$((WORLD_MANUAL_OK + 1))
       mark_pass "Manual $node_name: SOCKS probe OK ($SOCKS_OUT)."
     else
       mark_warn "Manual $node_name: SOCKS probe failed ($SOCKS_OUT)."
     fi
   done
+fi
+
+if [ "$WORLD_MANUAL_OK" -gt 0 ] && [ "$AUTO_WORLD_OK" -ne 1 ]; then
+  mark_fail "AUTO WORLD не работает, хотя хотя бы один ручной WORLD-узел прошёл probe. Это ошибка AUTO-переключения, а не только удалённого узла."
+elif [ "$WORLD_MANUAL_OK" -gt 0 ] && [ "$AUTO_WORLD_OK" -eq 1 ]; then
+  mark_pass "AUTO WORLD использовал рабочий узел при наличии доступного WORLD-кандидата."
 fi
 
 log ""
