@@ -231,7 +231,11 @@ def patch_runtime_probe
   return unless File.file?(RUNTIME_CONFIG)
   cfg = JSON.parse(File.read(RUNTIME_CONFIG, encoding: 'UTF-8'))
   if cfg['observatory'].is_a?(Hash)
+    # AUTO groups must probe candidate outbounds concurrently. With sequential
+    # probing, one dead first node can delay discovery of a healthy sibling long
+    # enough for startup to fail even though the group contains a usable node.
     cfg['observatory']['probeURL'] = PROBE_URLS.first
+    cfg['observatory']['enableConcurrency'] = true
   end
   File.write(RUNTIME_CONFIG, JSON.pretty_generate(cfg))
 rescue StandardError => e
@@ -253,7 +257,11 @@ def fallback_start
     f.flush
 
     pid = Process.spawn(XRAY, 'run', '-config', RUNTIME_CONFIG, out: f, err: f, pgroup: true)
-    sleep 1
+    # Give concurrent observatory probes a brief head start before testing the
+    # local SOCKS endpoint. Manual configurations have no observatory and do not
+    # need the extra warm-up.
+    cfg = JSON.parse(File.read(RUNTIME_CONFIG, encoding: 'UTF-8')) rescue {}
+    sleep(cfg['observatory'].is_a?(Hash) ? 3 : 1)
 
     unless process_alive?(pid)
       last_error = 'Xray stopped immediately'
@@ -322,6 +330,90 @@ def resilient_start
     disable_stale_auto_proxies
     [50, '', "ERROR: #{e.message}\n"]
   end
+end
+
+def read_menu_state
+  rc, out, = helper(['menu-state'])
+  return nil unless rc.zero?
+  parsed = JSON.parse(out)
+  parsed.is_a?(Hash) ? parsed : nil
+rescue StandardError
+  nil
+end
+
+def mode_args(mode)
+  return nil unless mode.is_a?(Hash)
+  if mode['type'] == 'manual'
+    node = mode['node'].to_s
+    node.empty? ? nil : ['mode', 'manual', node]
+  else
+    group = mode['group'].to_s
+    group = 'RF' if group.empty?
+    ['mode', 'auto', group]
+  end
+end
+
+def resilient_mode(args)
+  state = read_menu_state
+  return helper(['mode'] + args) unless state && state['on']
+
+  old_mode = state['mode'].is_a?(Hash) ? state['mode'] : { 'type' => 'auto', 'group' => 'RF' }
+  old_args = mode_args(old_mode)
+  target = args.join(' ')
+  log("foreground mode switch started: #{target}")
+
+  # Switch while OFF so the core helper only stores the requested mode. The
+  # supervisor then owns startup/retry semantics and can recover AUTO groups
+  # when one candidate node is unavailable.
+  helper(['stop'])
+  cleanup_orphan_runtime
+  disable_stale_auto_proxies
+
+  mrc, mout, merr = helper(['mode'] + args)
+  unless mrc.zero?
+    return [mrc, mout, merr]
+  end
+
+  src, sout, serr = resilient_start
+  if src.zero?
+    log("foreground mode switch succeeded: #{target}")
+    return [0, '', '']
+  end
+
+  target_error = (serr.empty? ? sout : serr).strip
+  log("foreground mode switch failed: #{target}: #{target_error}")
+
+  helper(['stop'])
+  cleanup_orphan_runtime
+  disable_stale_auto_proxies
+
+  rollback_error = ''
+  if old_args
+    rmc, rmout, rmerr = helper(old_args)
+    if rmc.zero?
+      rrc, rrout, rrerr = resilient_start
+      if rrc.zero?
+        log('foreground mode rollback succeeded')
+      else
+        rollback_error = (rrerr.empty? ? rrout : rrerr).strip
+      end
+    else
+      rollback_error = (rmerr.empty? ? rmout : rmerr).strip
+    end
+  else
+    rollback_error = 'previous mode unavailable'
+  end
+
+  unless rollback_error.empty?
+    helper(['stop'])
+    cleanup_orphan_runtime
+    disable_stale_auto_proxies
+    log("foreground mode rollback failed: #{rollback_error}")
+  end
+
+  message = "ERROR: Could not switch mode: #{target_error}"
+  message += " (rollback failed: #{rollback_error})" unless rollback_error.empty?
+  [50, '', message + "\n"]
 end
 
 def read_health
@@ -412,8 +504,11 @@ when 'stop'
     [rc, out, err]
   end
   print_helper_result(*result)
+when 'mode'
+  result = with_runtime_lock { resilient_mode(args) }
+  print_helper_result(*result)
 else
-  mutating = %w[mode update bootstrap install-login-agent uninstall-login-agent].include?(cmd)
+  mutating = %w[update bootstrap install-login-agent uninstall-login-agent].include?(cmd)
   result = if mutating
              with_runtime_lock { helper([cmd] + args) }
            else
