@@ -1,52 +1,53 @@
-name: Ошибка / Bug report
-description: Сообщить о проблеме AUTO Xray
+name: Bug report / Сообщить об ошибке
+description: Report an AUTO Xray problem / Сообщить о проблеме AUTO Xray
 title: "[Bug] "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Не публикуйте URL подписки, UUID, Reality keys, токены или пароли.
+        Do not publish subscription URLs, UUIDs, Reality keys, HWIDs, tokens, or passwords.
+        Не публикуйте URL подписки, UUID, Reality keys, HWID, токены или пароли.
   - type: input
     id: mac
     attributes:
-      label: Модель Mac
+      label: Mac model / Модель Mac
       placeholder: iMac 21.5-inch Late 2013
     validations:
       required: true
   - type: input
     id: macos
     attributes:
-      label: Версия macOS
+      label: macOS version / Версия macOS
       placeholder: 10.15.7 / 10.15.8
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Версия AUTO Xray
-      placeholder: 2.5.1
+      label: AUTO Xray version / Версия AUTO Xray
+      placeholder: 2.5.20
     validations:
       required: true
   - type: dropdown
     id: install
     attributes:
-      label: Способ установки
+      label: Installation method / Способ установки
       options:
         - DMG
-        - Catalina Installer
-        - Другое
+        - Catalina ZIP installer / Catalina ZIP-установщик
+        - Other / Другое
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
-      label: Что произошло
-      description: Опишите шаги и фактическое поведение.
+      label: What happened? / Что произошло?
+      description: Describe the steps and actual behavior. / Опишите шаги и фактическое поведение.
     validations:
       required: true
   - type: textarea
     id: error
     attributes:
-      label: Текст ошибки / безопасный фрагмент лога
-      description: Удалите приватные данные перед публикацией.
+      label: Error text or safe log excerpt / Текст ошибки или безопасный фрагмент лога
+      description: Remove private data before posting. / Удалите приватные данные перед публикацией.

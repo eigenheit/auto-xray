@@ -108,6 +108,6 @@ AUTO Xray работает как **system proxy client**, а не как TUN VP
 - [Установка](docs/INSTALLATION.ru.md)
 - [Решение проблем](docs/TROUBLESHOOTING.ru.md)
 - [FAQ](docs/FAQ.ru.md)
-- [Security](SECURITY.md)
+- [Безопасность](SECURITY.ru.md)
 
 Не публикуйте URL подписки, UUID, Reality keys или HWID в Issues.
