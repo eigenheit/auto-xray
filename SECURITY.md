@@ -1,75 +1,76 @@
 # Security
 
-## Скачать только из официального релиза
+**English** · [Русский](SECURITY.ru.md)
 
-Используйте только раздел **GitHub Releases** этого репозитория.
+## Download only from the official release
 
-Не запускайте копии AUTO Xray, полученные из неизвестных Telegram-каналов, файловых обменников и сторонних сайтов.
+Use only the **GitHub Releases** section of this repository.
+
+Do not run copies of AUTO Xray obtained from unknown Telegram channels, file-sharing services, or third-party websites.
 
 ## Gatekeeper
 
-Бесплатный релиз AUTO Xray может распространяться без Apple Developer ID и notarization. Поэтому macOS Catalina может предупреждать, что разработчик не может быть проверен.
+AUTO Xray may currently be distributed without an Apple Developer ID signature and notarization. macOS Catalina may therefore warn that the developer cannot be verified.
 
-Если вы сами скачали релиз из официального GitHub и контрольная сумма совпадает, используйте штатное разовое разрешение macOS:
+If you downloaded the release yourself from the official GitHub repository and the checksum matches, use the standard one-time macOS exception:
 
-- `Control + клик → Open`;
-- или **Security & Privacy → Open Anyway**.
+- `Control-click → Open`;
+- or **Security & Privacy → Open Anyway**.
 
-Apple Support:
+Apple Support: https://support.apple.com/102445
 
-https://support.apple.com/102445
+We **do not recommend disabling Gatekeeper globally**.
 
-Мы **не рекомендуем отключать Gatekeeper глобально**.
-
-Не используйте для установки AUTO Xray:
+Do not use this command to install AUTO Xray:
 
 ```text
 sudo spctl --master-disable
 ```
 
-и не меняйте глобальные настройки безопасности системы без необходимости.
+and do not change global macOS security settings unless necessary.
 
-## Когда НЕ надо обходить предупреждение
+## When NOT to bypass a warning
 
-Не запускайте файл, если macOS сообщает:
+Do not run the file if macOS reports that:
 
-- приложение «will damage your computer»;
-- обнаружено malware;
-- приложение автоматически перемещено в Trash;
-- SHA-256 не совпадает с опубликованным;
-- архив или приложение изменены после скачивания.
+- the app “will damage your computer”;
+- malware was detected;
+- the app was automatically moved to Trash;
+- the SHA-256 does not match the published value;
+- the archive or app was modified after download.
 
-Скачайте релиз заново из официального источника.
+Download a fresh copy from the official release instead.
 
-## Контрольные суммы
+## Checksums
 
-Для публичных релизов рекомендуется публиковать `SHA256SUMS.txt`.
+Public releases include `SHA256SUMS.txt`.
 
-На macOS проверить файл можно командой:
+On macOS, verify a file with:
 
 ```bash
-shasum -a 256 /путь/к/файлу
+shasum -a 256 /path/to/file
 ```
 
-Полученное значение должно полностью совпадать со значением в GitHub Release.
+The resulting value must exactly match the value published in the GitHub Release.
 
-## Приватные данные
+## Private data
 
-Не публикуйте в Issues:
+Do not publish the following in Issues:
 
-- URL VLESS-подписки;
-- UUID;
+- VLESS subscription URLs;
+- UUIDs;
 - Reality keys;
-- токены;
-- пароли.
+- tokens;
+- passwords;
+- HWIDs.
 
-Логи перед публикацией нужно просмотреть и удалить из них приватные данные.
+Review logs before posting them and remove any private data.
 
-## Сторонний компонент
+## Third-party component
 
-AUTO Xray включает Xray-core 1.8.4.
+AUTO Xray includes Xray-core 1.8.4.
 
-Сведения о лицензии стороннего компонента должны поставляться вместе с релизом в:
+Third-party licensing information is provided in:
 
 ```text
 THIRD_PARTY_NOTICES.txt
