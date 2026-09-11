@@ -1,190 +1,191 @@
-# Установка AUTO Xray на старый Mac
+# Installing AUTO Xray on an older Mac
 
-Эта инструкция рассчитана на пользователя без опыта работы с Terminal.
+**English** · [Русский](INSTALLATION.ru.md)
 
-## Перед установкой
+This guide is written for users who are not experienced with Terminal.
 
-Проверьте:
+## Before installation
 
-- Mac должен быть на процессоре **Intel**;
-- проверенная версия системы — **macOS Catalina 10.15.x**;
-- старый V2RayXS для AUTO Xray не требуется;
-- Python устанавливать не требуется.
+Check the following:
 
-Если у вас уже запущен V2RayXS или другой локальный proxy/VPN-клиент, лучше полностью закрыть его перед первым запуском AUTO Xray.
+- your Mac must use an **Intel** processor;
+- the tested system version is **macOS Catalina 10.15.x**;
+- the old V2RayXS app is not required for AUTO Xray;
+- Python does not need to be installed.
+
+If V2RayXS or another local proxy/VPN client is already running, it is best to quit it completely before the first AUTO Xray launch.
 
 ---
 
-# Способ 1. DMG — рекомендуется
+# Method 1. DMG — recommended
 
-Скачайте из **GitHub Releases**:
+Download from **GitHub Releases**:
 
 ```text
-AUTO_Xray_Catalina_v2.5.7.dmg
+AUTO_Xray_Catalina_v2.5.20.dmg
 ```
 
-1. Дважды нажмите на DMG.
-2. В открывшемся окне найдите **Install AUTO Xray.app**.
-3. Нажмите по нему `Control + клик` и выберите **Open / Открыть**.
-4. На macOS Catalina первое системное предупреждение может сообщить, что разработчик не может быть проверен, и **не предложить кнопку Open / Открыть**. Обычно в этом окне доступны только **Move to Trash / Переместить в Корзину** и **Cancel / Отменить**.
-5. Нажмите **Cancel / Отменить** и закройте предупреждение.
-6. Снова нажмите `Control + клик` по **Install AUTO Xray.app** и снова выберите **Open / Открыть**.
-7. Появится второе системное предупреждение, уже с кнопкой **Open / Открыть**. Нажмите ее.
-8. Установка начнется автоматически и не требует дополнительных подтверждений AUTO Xray.
-9. После завершения в верхней строке меню появится голубь 🕊. AUTO Xray будет в состоянии **OFF**, а обычный интернет должен работать напрямую.
+1. Double-click the DMG.
+2. In the window that opens, find **Install AUTO Xray.app**.
+3. `Control-click` it and choose **Open**.
+4. On macOS Catalina, the first system warning may say that the developer cannot be verified and may **not show an Open button**. Usually only **Move to Trash** and **Cancel** are available in this first dialog.
+5. Click **Cancel** and close the warning.
+6. `Control-click` **Install AUTO Xray.app** again and choose **Open** again.
+7. A second system warning should appear, this time with an **Open** button. Click it.
+8. Installation starts automatically and does not require additional AUTO Xray confirmations.
+9. When installation is complete, a dove 🕊 appears in the menu bar. AUTO Xray starts in the **OFF** state and normal internet access should continue directly.
 
-Это двухэтапное поведение Gatekeeper было проверено на реальном Intel Mac с macOS Catalina.
+This two-step Gatekeeper behavior was tested on a real Intel Mac running macOS Catalina.
 
 ---
 
-# macOS сообщает, что разработчик не может быть проверен
+# macOS says the developer cannot be verified
 
-AUTO Xray пока распространяется без Apple Developer ID и notarization, поэтому Catalina может показать предупреждение о неизвестном разработчике.
+AUTO Xray is currently distributed without an Apple Developer ID signature or notarization, so Catalina may show an unknown-developer warning.
 
-Используйте только штатные способы macOS.
+Use only the normal macOS mechanisms described below.
 
-## Основной способ на Catalina
+## Main method on Catalina
 
-1. `Control + клик` по **Install AUTO Xray.app**.
-2. Выберите **Open / Открыть**.
-3. Если первое предупреждение не содержит кнопки **Open / Открыть**, нажмите **Cancel / Отменить**.
-4. Повторите `Control + клик → Open / Открыть`.
-5. Во втором предупреждении нажмите **Open / Открыть**.
+1. `Control-click` **Install AUTO Xray.app**.
+2. Choose **Open**.
+3. If the first warning does not contain an **Open** button, click **Cancel**.
+4. Repeat `Control-click → Open`.
+5. In the second warning, click **Open**.
 
-После успешного первого запуска macOS обычно запоминает это решение для данной версии приложения.
+After a successful first launch, macOS normally remembers this decision for that version of the app.
 
-## Если повторный Control + клик → Open не помогает
+## If repeating Control-click → Open does not help
 
-На Catalina:
+On Catalina:
 
-1. Один раз попробуйте открыть **Install AUTO Xray.app** и закройте предупреждение.
-2. Откройте ** → System Preferences / Системные настройки**.
-3. Откройте **Security & Privacy / Защита и безопасность**.
-4. Перейдите на вкладку **General / Основные**.
-5. Если настройки заблокированы, нажмите на замок и введите пароль пользователя Mac.
-6. Найдите сообщение о заблокированном **Install AUTO Xray.app**.
-7. Нажмите **Open Anyway / Все равно открыть**.
-8. Подтвердите **Open / Открыть**.
+1. Try opening **Install AUTO Xray.app** once and close the warning.
+2. Open ** → System Preferences**.
+3. Open **Security & Privacy**.
+4. Go to the **General** tab.
+5. If settings are locked, click the lock and enter your Mac user password.
+6. Find the message about blocked **Install AUTO Xray.app**.
+7. Click **Open Anyway**.
+8. Confirm **Open**.
 
-На новых macOS:
+On newer macOS versions:
 
 **System Settings → Privacy & Security → Security → Open Anyway**
 
-Apple описывает этот способ как штатное разовое исключение для приложения от неизвестного разработчика.
+Apple provides this as a standard one-time exception for an app from an unidentified developer.
 
 ---
 
-# Способ 2. Резервный ZIP-установщик для Catalina
+# Method 2. Fallback ZIP installer for Catalina
 
-Если DMG не удается открыть или приложение постоянно блокируется, используйте:
+If the DMG cannot be opened or the app keeps getting blocked, use:
 
 ```text
-AUTO_Xray_Catalina_Installer_v2.5.7.zip
+AUTO_Xray_Catalina_Installer_v2.5.20.zip
 ```
 
-1. Скачайте ZIP только из GitHub Releases этого проекта.
-2. Дважды нажмите ZIP — macOS распакует его.
-3. Откройте распакованную папку.
-4. Найдите:
+1. Download the ZIP only from this project's GitHub Releases page.
+2. Double-click the ZIP — macOS will extract it.
+3. Open the extracted folder.
+4. Find:
 
 ```text
 INSTALL_AUTO_XRAY_CATALINA.command
 ```
 
-5. Лучше запускать его через `Control + клик → Open / Открыть`.
-6. Откроется окно Terminal. Установщик локально создаст AUTO Xray на вашем Mac.
-7. После завершения программа появится в:
+5. Prefer launching it with `Control-click → Open`.
+6. A Terminal window will open. The installer will create AUTO Xray locally on your Mac.
+7. When installation finishes, the app will be available at:
 
 ```text
 ~/Applications/AUTO Xray.app
 ```
 
-и автоматически запустится.
+and will launch automatically.
 
-Этот вариант не скачивает Xray-core и не требует предварительной установки V2RayXS.
+This method does not download Xray-core and does not require V2RayXS to be installed first.
 
-## Если .command не запускается
+## If the .command file does not start
 
-Если macOS показывает предупреждение о неизвестном разработчике, примените те же штатные шаги через **Open / Open Anyway**.
+If macOS shows an unidentified-developer warning, use the same standard **Open / Open Anyway** steps described above.
 
-Если Terminal пишет только:
+If Terminal shows only:
 
 ```text
 Permission denied
 ```
 
-это означает, что у файла потерялось право на запуск.
+then the file has lost its executable permission.
 
-Сделайте следующее:
+Do the following:
 
-1. Откройте **Terminal**.
-2. Напечатайте:
+1. Open **Terminal**.
+2. Type:
 
 ```text
 chmod +x 
 ```
 
-Обязательно оставьте пробел после `+x`.
+Make sure to leave a space after `+x`.
 
-3. Перетащите файл `INSTALL_AUTO_XRAY_CATALINA.command` из Finder прямо в окно Terminal.
-4. Нажмите `Enter`.
-5. После этого снова откройте установщик.
-
----
-
-# Какие предупреждения можно разрешать, а какие нельзя
-
-## Можно продолжить, если вы скачали файл из официального GitHub Releases
-
-Типичные сообщения:
-
-- «developer cannot be verified»;
-- «не удается проверить разработчика»;
-- «Apple cannot check it for malicious software»;
-- «приложение загружено из интернета».
-
-В этом случае используйте `Open / Open Anyway`, описанные выше.
-
-## Не продолжайте, если macOS пишет
-
-- **“will damage your computer” / «повредит компьютер»**;
-- обнаружено **malware / вредоносное ПО**;
-- файл был автоматически перемещен в Trash именно как вредоносный;
-- SHA-256 скачанного файла не совпадает с опубликованным.
-
-Удалите скачанный файл и получите новую копию из официального релиза.
-
-Не отключайте Gatekeeper целиком и не используйте `spctl --master-disable`.
+3. Drag `INSTALL_AUTO_XRAY_CATALINA.command` from Finder into the Terminal window.
+4. Press `Enter`.
+5. Try launching the installer again.
 
 ---
 
-# Первый запуск AUTO Xray
+# Which warnings can be allowed, and which must not be bypassed
 
-После установки голубь 🕊 должен быть полупрозрачным — это состояние **OFF**.
+## You may continue if you downloaded the file from the official GitHub Releases page
 
-Нажмите на голубя:
+Typical messages include:
 
-1. **Обновить подписку**
-2. вставьте HTTPS-ссылку вашей VLESS-подписки
-3. выберите RF / EU / World
-4. нажмите **Включить**
+- “developer cannot be verified”;
+- “Apple cannot check it for malicious software”;
+- “the application was downloaded from the Internet”.
 
-Яркий голубь означает, что AUTO Xray включен.
+In these cases, use **Open / Open Anyway** as described above.
+
+## Do not continue if macOS says
+
+- **“will damage your computer”**;
+- malware was detected;
+- the file was automatically moved to Trash specifically as malicious software;
+- the downloaded file's SHA-256 does not match the published value.
+
+Delete the downloaded file and obtain a new copy from the official release.
+
+Do not disable Gatekeeper globally and do not use `spctl --master-disable`.
+
+---
+
+# First launch of AUTO Xray
+
+After installation, the dove 🕊 should be translucent — this is the **OFF** state.
+
+Click the dove:
+
+1. **Update subscription**
+2. paste the HTTPS URL of your VLESS subscription
+3. choose RF / EU / World
+4. click **Enable**
+
+A bright dove means AUTO Xray is enabled.
 
 ---
 
 # Telegram
 
-Telegram Desktop:
+In Telegram Desktop:
 
 **Settings → Advanced → Connection type → Proxy settings → Use system proxy settings**
 
-Не выбирайте старый SOCKS `127.0.0.1:1081` от V2RayXS.
+Do not select the old V2RayXS SOCKS proxy at `127.0.0.1:1081`.
 
 ---
 
-# Если ничего не получилось
+# If installation still does not work
 
-Смотрите:
+See:
 
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
