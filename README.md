@@ -5,7 +5,11 @@
 <h1 align="center">AUTO Xray</h1>
 
 <p align="center">
-  Легкий VLESS/Reality-клиент для старых Intel Mac, которым современные клиенты уже не подходят.
+  Lightweight VLESS/Reality client for older Intel Macs that are no longer supported by modern clients.
+</p>
+
+<p align="center">
+  <strong>English</strong> · <a href="README.ru.md">Русский</a>
 </p>
 
 <p align="center">
@@ -16,94 +20,94 @@
 </p>
 
 > **AUTO Xray 2.5.20 — Stable**  
-> Проверено на реальном Intel Mac `x86_64` с macOS Catalina 10.15.x.
+> Tested on a real Intel Mac `x86_64` running macOS Catalina 10.15.x.
 
-## Скачать
+## Download
 
-**Текущая стабильная версия: AUTO Xray 2.5.20**
+**Current stable version: AUTO Xray 2.5.20**
 
-[**Скачать DMG — рекомендуется**](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/AUTO_Xray_Catalina_v2.5.20.dmg)
+[**Download DMG — recommended**](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/AUTO_Xray_Catalina_v2.5.20.dmg)
 
-Резервный вариант: [ZIP-инсталлятор](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/AUTO_Xray_Catalina_Installer_v2.5.20.zip) · [SHA256SUMS.txt](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/SHA256SUMS.txt)
+Fallback option: [ZIP installer](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/AUTO_Xray_Catalina_Installer_v2.5.20.zip) · [SHA256SUMS.txt](https://github.com/eigenheit/auto-xray/releases/download/v2.5.20/SHA256SUMS.txt)
 
-Не скачивайте AUTO Xray с посторонних сайтов и файловых обменников.
+Do not download AUTO Xray from third-party websites or file-sharing services.
 
-## Что умеет
+## Features
 
-- VLESS + Reality через встроенный **Xray-core 1.8.4**;
-- автоматический выбор узлов RF / EU / World;
-- ручной выбор конкретного сервера;
-- HTTP/HTTPS proxy `127.0.0.1:9001` и SOCKS5 `127.0.0.1:2081`;
-- автоматическая настройка системного proxy macOS;
-- восстановление после переподключения Wi‑Fi;
-- защита от зависших локальных proxy после выключения;
-- обновление подписки из меню;
-- запуск из строки меню macOS.
+- VLESS + Reality through bundled **Xray-core 1.8.4**;
+- automatic RF / EU / World node selection;
+- manual selection of a specific server;
+- HTTP/HTTPS proxy on `127.0.0.1:9001` and SOCKS5 on `127.0.0.1:2081`;
+- automatic macOS system proxy configuration;
+- recovery after Wi-Fi reconnects;
+- protection against stale local proxies after shutdown;
+- subscription updates from the menu;
+- native macOS menu-bar workflow.
 
-AUTO Xray работает как **system proxy client**, а не как TUN VPN.
+AUTO Xray works as a **system proxy client**, not as a TUN VPN.
 
-## Как выглядит
+## Screenshots
 
-![AUTO Xray в строке меню macOS Catalina](assets/screenshots/menubar.png)
+![AUTO Xray in the macOS Catalina menu bar](assets/screenshots/menubar.png)
 
-![DMG AUTO Xray на macOS Catalina](assets/screenshots/dmg-installer.png)
+![AUTO Xray DMG on macOS Catalina](assets/screenshots/dmg-installer.png)
 
-Скриншоты сделаны на реальном Intel Mac с macOS Catalina.
+Screenshots were captured on a real Intel Mac running macOS Catalina.
 
-## Установка
+## Installation
 
-1. Скачайте `AUTO_Xray_Catalina_v2.5.20.dmg`.
-2. Откройте DMG и запустите **Install AUTO Xray.app** через `Control + клик → Open`.
-3. Если Catalina сначала показывает только Cancel — нажмите Cancel и повторите открытие.
-4. После установки AUTO Xray запускается в состоянии **OFF**.
+1. Download `AUTO_Xray_Catalina_v2.5.20.dmg`.
+2. Open the DMG and launch **Install AUTO Xray.app** using `Control-click → Open`.
+3. If Catalina initially shows only Cancel, click Cancel and open the installer again.
+4. After installation, AUTO Xray starts in the **OFF** state.
 
-Полная инструкция: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+Full installation guide: [docs/INSTALLATION.md](docs/INSTALLATION.md) *(currently in Russian; English docs are planned)*
 
-## Первый запуск
+## First run
 
-Нажмите 🕊:
+Click 🕊:
 
-1. **Обновить подписку**.
-2. Выберите RF / EU / World или ручной сервер.
-3. Нажмите **Включить**.
+1. **Update subscription**.
+2. Choose RF / EU / World or a manual server.
+3. Click **Enable**.
 
-Яркий голубь = ON. Полупрозрачный голубь = OFF.
+Bright dove = ON. Translucent dove = OFF.
 
-## Безопасность релиза
+## Release security
 
-- Xray-core проверяется по SHA-256 перед упаковкой;
-- каждый релиз содержит SHA256SUMS;
-- CI проверяет сборку и установочные пакеты;
-- публичные DMG и ZIP не содержат диагностические тестовые инструменты.
+- Xray-core is verified by SHA-256 before packaging;
+- every release includes SHA256SUMS;
+- CI validates the build and installer packages;
+- public DMG and ZIP packages do not contain diagnostic test tools.
 
-## Ограничения
+## Limitations
 
-- официальный target: Intel Mac + macOS Catalina 10.15.x;
-- Apple Silicon не является целью этого релиза;
-- приложение пока не подписано Apple Developer ID и использует штатный Gatekeeper flow;
-- приложения, игнорирующие system proxy, могут не использовать AUTO Xray.
+- official target: Intel Mac + macOS Catalina 10.15.x;
+- Apple Silicon is not a target of this release;
+- the app is not currently signed with an Apple Developer ID and therefore uses the standard Gatekeeper flow;
+- applications that ignore the system proxy may not use AUTO Xray.
 
-Если macOS сообщает о malware или "will damage your computer" — не обходите предупреждение.
+If macOS reports malware or says the app "will damage your computer", do not bypass the warning.
 
-## Данные
+## Data
 
-Настройки:
+Settings:
 
 ```text
 ~/Library/Application Support/AUTO Xray/
 ```
 
-Логи:
+Logs:
 
 ```text
 ~/Library/Logs/AUTO Xray/
 ```
 
-## Помощь
+## Help
 
-- [Установка](docs/INSTALLATION.md)
-- [Решение проблем](docs/TROUBLESHOOTING.md)
-- [FAQ](docs/FAQ.md)
+- [Installation](docs/INSTALLATION.md) *(Russian)*
+- [Troubleshooting](docs/TROUBLESHOOTING.md) *(Russian)*
+- [FAQ](docs/FAQ.md) *(Russian)*
 - [Security](SECURITY.md)
 
-Не публикуйте URL подписки, UUID, Reality keys или HWID в Issues.
+Do not publish subscription URLs, UUIDs, Reality keys, or HWIDs in Issues.
