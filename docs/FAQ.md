@@ -1,95 +1,97 @@
 # AUTO Xray — FAQ
 
-## Для каких Mac предназначен AUTO Xray?
+**English** · [Русский](FAQ.ru.md)
 
-Проверенная конфигурация — **Intel Mac (`x86_64`) с macOS Catalina 10.15.x**.
+## Which Macs is AUTO Xray intended for?
 
-AUTO Xray появился именно как легкий клиент для старых Intel Mac, на которых современные VLESS/VPN-клиенты уже требуют более новую macOS.
+The tested configuration is an **Intel Mac (`x86_64`) running macOS Catalina 10.15.x**.
 
-## Работает ли AUTO Xray на Apple Silicon?
+AUTO Xray was created specifically as a lightweight client for older Intel Macs where modern VLESS/VPN clients already require a newer macOS version.
 
-Текущий релиз не предназначен для M1/M2/M3/M4. Внутри поставляется Intel-версия Xray-core.
+## Does AUTO Xray work on Apple Silicon?
 
-## Почему macOS пишет, что разработчик не может быть проверен?
+The current release is not intended for M1/M2/M3/M4 Macs. It bundles the Intel build of Xray-core.
 
-Публичная версия пока не подписана Apple Developer ID и не notarized.
+## Why does macOS say the developer cannot be verified?
 
-На Catalina проверенный сценарий такой:
+The public build is not currently signed with an Apple Developer ID and is not notarized.
 
-1. `Control + клик → Open / Открыть` по **Install AUTO Xray.app**.
-2. Если первое предупреждение не содержит кнопки **Open / Открыть**, нажмите **Cancel / Отменить**.
-3. Повторите `Control + клик → Open / Открыть`.
-4. Во втором предупреждении появится **Open / Открыть** — нажмите ее.
+On Catalina, the tested flow is:
 
-Не отключайте Gatekeeper глобально.
+1. `Control-click → Open` on **Install AUTO Xray.app**.
+2. If the first warning does not contain an **Open** button, click **Cancel**.
+3. Repeat `Control-click → Open`.
+4. The second warning should show **Open** — click it.
 
-## Нужно ли устанавливать Xray отдельно?
+Do not disable Gatekeeper globally.
 
-Нет. Проверенный **Xray-core 1.8.4** уже находится внутри установочного пакета.
+## Do I need to install Xray separately?
 
-## Нужен ли V2RayXS?
+No. The tested **Xray-core 1.8.4** is already included in the installation package.
 
-Нет. AUTO Xray — самостоятельный клиент.
+## Do I need V2RayXS?
 
-Если V2RayXS или другой локальный proxy-клиент запущен, лучше закрыть его перед первой установкой AUTO Xray.
+No. AUTO Xray is a standalone client.
 
-## Какие локальные порты использует AUTO Xray?
+If V2RayXS or another local proxy client is running, it is best to quit it before the first AUTO Xray installation.
+
+## Which local ports does AUTO Xray use?
 
 - HTTP/HTTPS: `127.0.0.1:9001`
 - SOCKS5: `127.0.0.1:2081`
 
-## Это полноценный VPN для всего компьютера?
+## Is this a full-device VPN?
 
-AUTO Xray использует системные proxy-настройки macOS. Это не TUN/Network Extension VPN.
+AUTO Xray uses the macOS system proxy settings. It is not a TUN/Network Extension VPN.
 
-Большинство приложений, использующих system proxy, будут работать через AUTO Xray. Программы, которые игнорируют системные proxy-настройки, могут идти напрямую.
+Most applications that use the system proxy will work through AUTO Xray. Applications that ignore the macOS system proxy may connect directly.
 
-## Как настроить Telegram?
+## How should I configure Telegram?
 
-В Telegram Desktop:
+In Telegram Desktop:
 
 **Settings → Advanced → Connection type → Proxy settings → Use system proxy settings**
 
-Отдельный SOCKS-порт вводить не требуется.
+You do not need to enter a separate SOCKS port.
 
-## Что означают RF / EU / World?
+## What do RF / EU / World mean?
 
-Это группы узлов из вашей подписки. В автоматическом режиме AUTO Xray передает группу в Xray и использует `leastPing` для выбора доступного узла с лучшей задержкой внутри этой группы.
+They are groups of nodes from your subscription. In automatic mode, AUTO Xray passes the group to Xray and uses `leastPing` to select the available node with the best latency within that group.
 
-## Что произойдет, если Wi-Fi пропадет?
+## What happens if Wi-Fi disconnects?
 
-Supervisor AUTO Xray периодически проверяет доступность proxy. После возвращения Wi-Fi он повторно применяет системные proxy-настройки и при необходимости перезапускает Xray.
+The AUTO Xray supervisor periodically checks proxy availability. After Wi-Fi returns, it reapplies the system proxy settings and restarts Xray if necessary.
 
-## Что происходит после выключения AUTO Xray?
+## What happens when AUTO Xray is disabled?
 
-AUTO Xray останавливает Xray и восстанавливает предыдущие proxy-настройки macOS.
+AUTO Xray stops Xray and restores the previous macOS proxy settings.
 
-Если предыдущая настройка указывала на неработающий локальный proxy, AUTO Xray отключает такой «мертвый» localhost proxy, чтобы обычный интернет не пропал.
+If the previous configuration pointed to a non-working local proxy, AUTO Xray disables that stale localhost proxy so normal internet access is not lost.
 
-## Где хранятся настройки?
+## Where are settings stored?
 
 ```text
 ~/Library/Application Support/AUTO Xray/
 ```
 
-Логи:
+Logs:
 
 ```text
 ~/Library/Logs/AUTO Xray/
 ```
 
-## Сохраняется ли подписка при обновлении?
+## Is the subscription preserved during updates?
 
-Да. Установщик сохраняет subscription URL, HWID и рабочие настройки.
+Yes. The installer preserves the subscription URL, HWID, and working settings.
 
-## Что делать, если AUTO Xray не запускается?
+## What should I do if AUTO Xray does not start?
 
-Сначала откройте [INSTALLATION.md](INSTALLATION.md), затем [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+Start with [INSTALLATION.md](INSTALLATION.md), then see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-Если создаете GitHub Issue, не публикуйте URL подписки, UUID, Reality keys, HWID или пароли.
+If you create a GitHub Issue, do not publish subscription URLs, UUIDs, Reality keys, HWIDs, or passwords.
 
-## Можно ли доверять скачанному файлу?
+## Can I trust the downloaded file?
 
-Скачивайте только из официального GitHub Releases. В каждом релизе публикуется `SHA256SUMS.txt`.
+Download only from the official GitHub Releases page. Every release publishes `SHA256SUMS.txt`.
 
-Если macOS сообщает **“will damage your computer”**, обнаруживает malware или перемещает файл в Корзину как вредоносный, не обходите предупреждение.
+If macOS says **“will damage your computer”**, detects malware, or moves the file to Trash as malicious software, do not bypass the warning.

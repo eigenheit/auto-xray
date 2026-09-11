@@ -61,7 +61,7 @@ AUTO Xray работает как **system proxy client**, а не как TUN VP
 3. Если Catalina сначала показывает только Cancel — нажмите Cancel и повторите открытие.
 4. После установки AUTO Xray запускается в состоянии **OFF**.
 
-Полная инструкция: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+Полная инструкция: [docs/INSTALLATION.ru.md](docs/INSTALLATION.ru.md)
 
 ## Первый запуск
 
@@ -105,9 +105,9 @@ AUTO Xray работает как **system proxy client**, а не как TUN VP
 
 ## Помощь
 
-- [Установка](docs/INSTALLATION.md)
-- [Решение проблем](docs/TROUBLESHOOTING.md)
-- [FAQ](docs/FAQ.md)
+- [Установка](docs/INSTALLATION.ru.md)
+- [Решение проблем](docs/TROUBLESHOOTING.ru.md)
+- [FAQ](docs/FAQ.ru.md)
 - [Security](SECURITY.md)
 
 Не публикуйте URL подписки, UUID, Reality keys или HWID в Issues.

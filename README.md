@@ -61,7 +61,7 @@ Screenshots were captured on a real Intel Mac running macOS Catalina.
 3. If Catalina initially shows only Cancel, click Cancel and open the installer again.
 4. After installation, AUTO Xray starts in the **OFF** state.
 
-Full installation guide: [docs/INSTALLATION.md](docs/INSTALLATION.md) *(currently in Russian; English docs are planned)*
+Full installation guide: [docs/INSTALLATION.md](docs/INSTALLATION.md)
 
 ## First run
 
@@ -105,9 +105,9 @@ Logs:
 
 ## Help
 
-- [Installation](docs/INSTALLATION.md) *(Russian)*
-- [Troubleshooting](docs/TROUBLESHOOTING.md) *(Russian)*
-- [FAQ](docs/FAQ.md) *(Russian)*
+- [Installation](docs/INSTALLATION.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [FAQ](docs/FAQ.md)
 - [Security](SECURITY.md)
 
 Do not publish subscription URLs, UUIDs, Reality keys, or HWIDs in Issues.
