@@ -1,60 +1,57 @@
-# AUTO Xray v2.5 — Catalina Intel
+# AUTO Xray 2.5.20 — Stable
 
-Легкий standalone VLESS/Reality-клиент для старых Intel Mac.
+Lightweight standalone VLESS/Reality client for older Intel Macs running macOS Catalina.
 
-### Поддержка
+## Support
 
 - Intel Mac (`x86_64`)
-- проверено на macOS Catalina 10.15.x
-- V2RayXS не требуется
-- Python не требуется
-- Xray-core 1.8.4 встроен
+- tested on macOS Catalina 10.15.x
+- no V2RayXS required
+- no Python installation required
+- bundled Xray-core 1.8.4
 
-### Что скачать
+## Download
 
-**Рекомендуется:**
+**Recommended:**
 
-`AUTO_Xray_Catalina_Intel_v2.5.dmg`
+`AUTO_Xray_Catalina_v2.5.20.dmg`
 
-Откройте DMG → перетащите **AUTO Xray** в **Applications** → запустите.
+Open the DMG and launch **Install AUTO Xray.app** using `Control-click → Open`.
 
-**Если Catalina не дает установить приложение обычным способом:**
+If Catalina initially shows a warning without an **Open** button, click **Cancel**, then repeat `Control-click → Open` and confirm **Open** on the second prompt.
 
-`AUTO_Xray_Catalina_Installer_v2.5.zip`
+**Fallback ZIP installer:**
 
-Распакуйте архив и запустите `INSTALL_AUTO_XRAY_CATALINA.command`.
+`AUTO_Xray_Catalina_Installer_v2.5.20.zip`
 
-### Предупреждение macOS
+Extract the archive and launch `INSTALL_AUTO_XRAY_CATALINA.command`.
 
-Бесплатный релиз может быть без Apple Developer ID/notarization. Поэтому Catalina может показать сообщение о неизвестном разработчике.
+After installation, AUTO Xray starts in the **OFF** state.
 
-Если файл скачан именно из этого GitHub Release:
+## macOS Gatekeeper
 
-`Control + клик по AUTO Xray → Open`
+AUTO Xray may be distributed without Apple Developer ID signing/notarization, so Catalina can report that the developer cannot be verified.
 
-или:
+Use only the standard macOS one-time exception described above or:
 
 `System Preferences → Security & Privacy → General → Open Anyway`
 
-Не отключайте Gatekeeper целиком.
+Do not disable Gatekeeper globally.
 
-Подробная инструкция: `docs/INSTALLATION.md`.
+Full guide: `docs/INSTALLATION.md`.
 
-### Первый запуск
+## First run
 
-🕊 → **Обновить подписку** → вставить HTTPS-ссылку → выбрать RF/EU/World → **Включить**.
+🕊 → **Update subscription** → paste your HTTPS VLESS subscription URL → choose RF / EU / World → **Enable**.
 
-Для Telegram:
+Telegram Desktop:
 
 `Settings → Advanced → Connection type → Proxy settings → Use system proxy settings`
 
-### SHA-256
+## Release integrity
 
-Перед публикацией вставить сюда контрольные суммы релизных файлов:
+Each public release includes `SHA256SUMS.txt`. Verify downloaded files against the published SHA-256 values before troubleshooting suspicious download warnings.
 
-```text
-<DMG_SHA256>  AUTO_Xray_Catalina_Intel_v2.5.dmg
-<ZIP_SHA256>  AUTO_Xray_Catalina_Installer_v2.5.zip
-```
+Do not publish subscription URLs, UUIDs, Reality keys, HWIDs, tokens, or passwords in Issues.
 
-Полная инструкция и решение проблем находятся в README репозитория.
+Documentation: `README.md` · Russian README: `README.ru.md`.
