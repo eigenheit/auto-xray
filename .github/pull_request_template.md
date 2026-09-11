@@ -1,11 +1,11 @@
-## Что изменено
+## What changed / Что изменено
 
 - 
 
-## Проверки
+## Checks / Проверки
 
-- [ ] `bash -n` для измененных `.command`
+- [ ] `bash -n` for changed `.command` files / для изменённых `.command`
 - [ ] `ruby -c src/auto-xray-helper.rb`
-- [ ] AppleScript компилируется через `osacompile`
-- [ ] Нет пользовательских subscription URL / UUID / HWID / логов
-- [ ] Если менялся runtime — проверено на Intel Mac + Catalina
+- [ ] AppleScript compiles with `osacompile` / AppleScript компилируется через `osacompile`
+- [ ] No user subscription URLs / UUIDs / HWIDs / logs / Нет пользовательских subscription URL / UUID / HWID / логов
+- [ ] If runtime changed, tested on Intel Mac + Catalina / Если менялся runtime — проверено на Intel Mac + Catalina
