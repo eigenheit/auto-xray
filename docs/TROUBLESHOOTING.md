@@ -1,212 +1,214 @@
-# AUTO Xray — решение проблем
+# AUTO Xray — troubleshooting
 
-## 1. Голубь 🕊 не появился
+**English** · [Русский](TROUBLESHOOTING.ru.md)
 
-Откройте вручную:
+## 1. The dove 🕊 does not appear
+
+Open the app manually:
 
 ```text
 Applications → AUTO Xray
 ```
 
-Если вы использовали альтернативный Catalina Installer, приложение может находиться здесь:
+If you used the alternative Catalina Installer, the app may be located here:
 
 ```text
 ~/Applications/AUTO Xray.app
 ```
 
-Если macOS блокирует запуск, используйте инструкцию:
+If macOS blocks the app, follow the installation guide:
 
 [INSTALLATION.md](INSTALLATION.md)
 
 ---
 
-## 2. Голубь есть, но интернет не работает
+## 2. The dove is visible, but the internet does not work
 
-1. Нажмите 🕊.
-2. Выберите **Выключить**.
-3. Подождите несколько секунд.
-4. Снова нажмите **Включить**.
+1. Click 🕊.
+2. Choose **Disable**.
+3. Wait a few seconds.
+4. Click **Enable** again.
 
-Полностью закройте V2RayXS и другие приложения, которые сами меняют системный proxy.
+Quit V2RayXS completely, along with any other apps that modify the macOS system proxy themselves.
 
-AUTO Xray использует локальные порты:
+AUTO Xray uses these local ports:
 
 ```text
 HTTP/HTTPS: 127.0.0.1:9001
 SOCKS5:     127.0.0.1:2081
 ```
 
-Два proxy-клиента, одновременно меняющих системные настройки, могут мешать друг другу.
+Two proxy clients changing system settings at the same time may interfere with each other.
 
 ---
 
-## 3. Подписка не обновляется
+## 3. The subscription does not update
 
-Проверьте:
+Check that:
 
-- ссылка начинается с `https://`;
-- она действительно является ссылкой на VLESS-подписку;
-- интернет работает при выключенном AUTO Xray;
-- подписка не истекла;
-- провайдер не ограничил число устройств.
+- the URL starts with `https://`;
+- it is actually a VLESS subscription URL;
+- the internet works while AUTO Xray is disabled;
+- the subscription has not expired;
+- your provider has not limited the number of devices.
 
-Попробуйте снова через:
+Try again using:
 
-**🕊 → Обновить подписку**
+**🕊 → Update subscription**
 
-Не публикуйте ссылку подписки в GitHub Issue.
+Do not publish your subscription URL in a GitHub Issue.
 
 ---
 
-## 4. Telegram не подключается
+## 4. Telegram does not connect
 
-В Telegram Desktop:
+In Telegram Desktop:
 
 **Settings → Advanced → Connection type → Proxy settings**
 
-выберите:
+choose:
 
 **Use system proxy settings**
 
-Если раньше использовался V2RayXS, удалите или не выбирайте старый:
+If you previously used V2RayXS, remove or do not select the old proxy:
 
 ```text
 SOCKS5 127.0.0.1:1081
 ```
 
-AUTO Xray использует другой локальный SOCKS-порт:
+AUTO Xray uses a different local SOCKS port:
 
 ```text
 127.0.0.1:2081
 ```
 
-Но при режиме **Use system proxy settings** вручную указывать его в Telegram не требуется.
+However, when **Use system proxy settings** is enabled, you do not need to enter this port manually in Telegram.
 
 ---
 
-## 5. macOS пишет «developer cannot be verified»
+## 5. macOS says “developer cannot be verified”
 
-Это предупреждение Gatekeeper.
+This is a Gatekeeper warning.
 
-Не отключайте Gatekeeper.
+Do not disable Gatekeeper.
 
-Используйте:
+Use either:
 
-- `Control + клик → Open`;
-- либо на Catalina:
+- `Control-click → Open`;
+- or, on Catalina:
   **System Preferences → Security & Privacy → General → Open Anyway**.
 
-Полная инструкция:
+Full instructions:
 
 [INSTALLATION.md](INSTALLATION.md)
 
 ---
 
-## 6. macOS пишет, что приложение «повредит компьютер»
+## 6. macOS says the app “will damage your computer”
 
-Не обходите это предупреждение.
+Do not bypass this warning.
 
-1. Удалите скачанный файл.
-2. Скачайте релиз заново с официальной страницы GitHub.
-3. Проверьте SHA-256, если он опубликован.
-4. Если предупреждение повторяется — создайте Issue и не запускайте приложение.
-
----
-
-## 7. macOS пишет «app is damaged»
-
-Не применяйте случайные команды из интернета для отключения системной защиты.
-
-Сначала:
-
-1. удалите DMG/ZIP;
-2. скачайте релиз заново;
-3. распакуйте штатной **Archive Utility** macOS;
-4. проверьте контрольную сумму;
-5. попробуйте альтернативный Catalina Installer.
-
-Сообщение «damaged» также может означать повреждение или изменение скачанного файла.
+1. Delete the downloaded file.
+2. Download the release again from the official GitHub page.
+3. Verify the SHA-256 checksum if one is published.
+4. If the warning appears again, create an Issue and do not launch the app.
 
 ---
 
-## 8. Установщик пишет `Permission denied`
+## 7. macOS says “app is damaged”
 
-Это относится к альтернативному `.command`-установщику.
+Do not use random commands from the internet to disable macOS security protections.
 
-Откройте Terminal и напечатайте:
+First:
+
+1. delete the DMG/ZIP;
+2. download the release again;
+3. extract it using the standard macOS **Archive Utility**;
+4. verify the checksum;
+5. try the alternative Catalina Installer.
+
+A “damaged” message may also indicate that the downloaded file was corrupted or modified.
+
+---
+
+## 8. The installer shows `Permission denied`
+
+This applies to the alternative `.command` installer.
+
+Open Terminal and type:
 
 ```text
 chmod +x 
 ```
 
-оставив пробел.
+leaving the trailing space.
 
-Перетащите `INSTALL_AUTO_XRAY_CATALINA.command` в окно Terminal и нажмите `Enter`.
+Drag `INSTALL_AUTO_XRAY_CATALINA.command` into the Terminal window and press `Enter`.
 
-После этого повторите запуск.
-
----
-
-## 9. AUTO Xray включен, но конкретный сайт не открывается
-
-Попробуйте сменить группу:
-
-- **Автовыбор · RF**
-- **Автовыбор · EU**
-- **Автовыбор · World**
-
-или выбрать другой сервер вручную.
-
-Некоторые сайты могут быть недоступны из определенной страны или конкретной сети.
+Then try launching the installer again.
 
 ---
 
-## 10. Где посмотреть лог
+## 9. AUTO Xray is enabled, but a specific website does not open
 
-Лог AUTO Xray:
+Try switching groups:
+
+- **Auto · RF**
+- **Auto · EU**
+- **Auto · World**
+
+or select a different server manually.
+
+Some websites may be unavailable from a particular country or network.
+
+---
+
+## 10. Where to find the log
+
+AUTO Xray logs:
 
 ```text
 ~/Library/Logs/AUTO Xray/
 ```
 
-Рабочие данные:
+Working data:
 
 ```text
 ~/Library/Application Support/AUTO Xray/
 ```
 
-При обращении за помощью можно прислать последние строки лога, но предварительно убедитесь, что в них нет приватной ссылки подписки, UUID или ключей.
+When asking for help, you may share the latest log lines, but first make sure they do not contain a private subscription URL, UUID, or keys.
 
 ---
 
-## 11. Как полностью удалить AUTO Xray
+## 11. How to completely remove AUTO Xray
 
-Используйте:
+Use:
 
 ```text
 UNINSTALL_AUTO_XRAY.command
 ```
 
-Если такого файла в вашем релизе нет, создайте Issue и укажите номер версии.
+If this file is not present in your release, create an Issue and include the version number.
 
 ---
 
-## Что написать в GitHub Issue
+## What to include in a GitHub Issue
 
-Укажите:
+Include:
 
-- модель Mac;
-- Intel или Apple Silicon;
-- версию macOS;
-- версию AUTO Xray;
-- способ установки: DMG или Catalina Installer;
-- точный текст ошибки;
-- что происходило непосредственно перед ошибкой.
+- Mac model;
+- Intel or Apple Silicon;
+- macOS version;
+- AUTO Xray version;
+- installation method: DMG or Catalina Installer;
+- exact error text;
+- what happened immediately before the error.
 
-Не публикуйте:
+Do not publish:
 
-- URL подписки;
-- UUID;
+- subscription URLs;
+- UUIDs;
 - Reality public/private keys;
-- пароли;
-- персональные токены.
+- passwords;
+- personal access tokens.
